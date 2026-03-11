@@ -9,6 +9,19 @@ import requests
 logger = logging.getLogger("MLEvolve")
 
 
+def _normalize_validate_response(response_json: dict) -> dict:
+    """Accept both MLEvolve and original mle-bench grading server payloads."""
+    if "is_valid" in response_json and "result" in response_json:
+        return response_json
+
+    if "result" in response_json:
+        result = response_json["result"]
+        is_valid = isinstance(result, str) and result.strip() == "Submission is valid."
+        return {"is_valid": is_valid, "result": result}
+
+    return response_json
+
+
 def get_server_url_list():
     """Return server URL list (env GRADING_SERVER_PORT or default)."""
     server_port = os.getenv("GRADING_SERVER_PORT", "5005")
@@ -68,7 +81,7 @@ def call_validate(exp_id, submission_path, timeout=300, max_retries=3):
                     logger.error(f"Server returned error: {response.text}")
                     return False, response_json['details']
                 else:
-                    return True, response_json
+                    return True, _normalize_validate_response(response_json)
             else:
                 return False, f"Server at {server_url} is not online"
         except requests.exceptions.Timeout:

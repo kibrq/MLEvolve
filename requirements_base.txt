@@ -98,6 +98,7 @@ grpc-google-iam-v1==0.14.3
 grpc-interceptor==0.15.4
 grpcio==1.63.2
 grpcio-status==1.63.2
+litellm==1.79.0
 
 
 openai==1.66.3

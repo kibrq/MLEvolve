@@ -1,6 +1,20 @@
+import os
 import logging
-from . import gemini as _gemini
-from .gemini import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
+from config import Config
+
+_BACKEND_NAME = os.environ.get("MLEVOLVE_LLM_BACKEND", "gemini").strip().lower()
+
+if _BACKEND_NAME == "litellm":
+    from . import litellm_backend as _backend
+    from .litellm_backend import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
+elif _BACKEND_NAME == "gemini":
+    from . import gemini as _backend
+    from .gemini import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
+else:
+    raise ValueError(
+        f"Unsupported MLEVOLVE_LLM_BACKEND='{_BACKEND_NAME}'. Expected 'gemini' or 'litellm'."
+    )
+
 from config import Config
 logger = logging.getLogger("MLEvolve")
 
@@ -53,7 +67,7 @@ def query(
     if func_spec:
         logger.info(f"function spec: {func_spec.to_dict()}", extra={"verbose": True})
 
-    output, req_time, in_tok_count, out_tok_count, info = _gemini.query(
+    output, req_time, in_tok_count, out_tok_count, info = _backend.query(
         system_message=system_message,
         user_message=user_message,
         func_spec=func_spec,
