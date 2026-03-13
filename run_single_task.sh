@@ -14,27 +14,35 @@ SERVER_ID=${3:-111}
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
-# ── Launch the local grading (format-validation) server ──
+# ── Validation server configuration ──
 export DATASET_DIR="${dataset_dir}"
-bash "$ROOT/launch_server.sh" "${SERVER_ID}"
+export MLEVOLVE_VALIDATION_SERVER_URL="${MLEVOLVE_VALIDATION_SERVER_URL:-http://127.0.0.1:5000}"
 
-BASE_PORT=5005
-GRADING_SERVER_PORT=$((BASE_PORT + SERVER_ID))
-export GRADING_SERVER_PORT
+# Legacy compatibility: only start MLEvolve's custom validator when explicitly requested.
+if [ "${MLEVOLVE_USE_LOCAL_VALIDATION_SERVER:-0}" = "1" ]; then
+    bash "$ROOT/launch_server.sh" "${SERVER_ID}"
 
-echo "Waiting for grading server on port ${GRADING_SERVER_PORT} ..."
-MAX_WAIT=30
-WAITED=0
-while [ $WAITED -lt $MAX_WAIT ]; do
-    if curl -s "http://127.0.0.1:${GRADING_SERVER_PORT}/health" > /dev/null 2>&1; then
-        echo "Grading server ready (port ${GRADING_SERVER_PORT})."
-        break
+    BASE_PORT=5005
+    GRADING_SERVER_PORT=$((BASE_PORT + SERVER_ID))
+    export GRADING_SERVER_PORT
+    export MLEVOLVE_VALIDATION_SERVER_URL="http://127.0.0.1:${GRADING_SERVER_PORT}"
+
+    echo "Waiting for local grading server on ${MLEVOLVE_VALIDATION_SERVER_URL} ..."
+    MAX_WAIT=30
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        if curl -s "${MLEVOLVE_VALIDATION_SERVER_URL}/health" > /dev/null 2>&1; then
+            echo "Local grading server ready (${MLEVOLVE_VALIDATION_SERVER_URL})."
+            break
+        fi
+        sleep 1
+        WAITED=$((WAITED + 1))
+    done
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo "Warning: local grading server may not be ready yet, proceeding anyway ..."
     fi
-    sleep 1
-    WAITED=$((WAITED + 1))
-done
-if [ $WAITED -ge $MAX_WAIT ]; then
-    echo "Warning: grading server may not be ready yet, proceeding anyway ..."
+else
+    echo "Using standard MLE-bench validation server at ${MLEVOLVE_VALIDATION_SERVER_URL}"
 fi
 
 # ── Experiment settings ──
@@ -71,6 +79,7 @@ CUDA_VISIBLE_DEVICES=$MEMORY_INDEX timeout --foreground --signal=TERM --kill-aft
   exp_name="${EXP_ID}" \
   start_cpu_id="${start_cpu}" \
   cpu_number="${CPUS_PER_TASK}"
+RUN_EXIT=$?
 
 if [ $RUN_EXIT -eq 124 ]; then
   echo "Timed out after $TIME_LIMIT"

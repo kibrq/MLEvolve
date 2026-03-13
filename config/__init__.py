@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 from typing import Hashable, cast
 import datetime
@@ -101,6 +102,7 @@ class AgentConfig:
 class ExecConfig:
     timeout: int
     agent_file_name: str
+    python_cmd: list[str]
 
 
 @dataclass
@@ -153,15 +155,31 @@ def _get_next_logindex(dir: Path) -> int:
     return max_index + 1
 
 
+DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.yaml"
+
+
+def _resolve_config_path(path: Path | None = None) -> Path:
+    """Resolve config path from explicit arg, env override, or default."""
+    if path is not None:
+        return Path(path)
+
+    env_path = os.getenv("MLEVOLVE_CONFIG_PATH")
+    if env_path:
+        return Path(env_path)
+
+    return DEFAULT_CONFIG_PATH
+
+
 def _load_cfg(
-    path: Path = Path(__file__).parent / "config.yaml", use_cli_args=True
+    path: Path | None = None, use_cli_args=True
 ) -> Config:
+    path = _resolve_config_path(path)
     cfg = OmegaConf.load(path)
     if use_cli_args:
         cfg = OmegaConf.merge(cfg, OmegaConf.from_cli())
     return cfg
 
-def load_cfg(path: Path = Path(__file__).parent / "config.yaml") -> Config:
+def load_cfg(path: Path | None = None) -> Config:
     """Load config from .yaml file and CLI args, and set up logging directory."""
     return prep_cfg(_load_cfg(path))
 

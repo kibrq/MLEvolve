@@ -147,7 +147,6 @@ def query(
     if func_spec is not None:
         request["tools"] = [func_spec.as_openai_tool_dict]
         request["tool_choice"] = func_spec.openai_tool_choice_dict
-        request["response_format"] = {"type": "json_object"}
 
     t0 = time.time()
     logger.info(f"Querying LiteLLM with model: {request['model']}")

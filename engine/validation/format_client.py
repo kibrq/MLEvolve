@@ -3,6 +3,7 @@
 import logging
 import os
 import time
+from typing import Any
 
 import requests
 
@@ -22,10 +23,53 @@ def _normalize_validate_response(response_json: dict) -> dict:
     return response_json
 
 
+def _normalize_validate_text(response_text: str) -> dict:
+    """Accept plain-text validator responses."""
+    result = response_text.strip()
+    is_valid = result == "Submission is valid."
+    return {"is_valid": is_valid, "result": result}
+
+
+def _extract_validate_response(response: requests.Response) -> dict:
+    """Accept JSON or plain-text validation responses."""
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type.lower():
+        return _normalize_validate_response(response.json())
+
+    text = response.text.strip()
+    if not text:
+        return {"is_valid": False, "result": ""}
+
+    try:
+        maybe_json: Any = response.json()
+    except ValueError:
+        return _normalize_validate_text(text)
+
+    if isinstance(maybe_json, dict):
+        return _normalize_validate_response(maybe_json)
+
+    if isinstance(maybe_json, str):
+        return _normalize_validate_text(maybe_json)
+
+    return {"is_valid": False, "result": text}
+
+
 def get_server_url_list():
-    """Return server URL list (env GRADING_SERVER_PORT or default)."""
+    """Return validator base URLs.
+
+    Defaults to the standard MLE-bench validation server.
+    Legacy support remains available through GRADING_SERVER_PORT.
+    """
+    explicit_url = os.getenv("MLEVOLVE_VALIDATION_SERVER_URL")
+    if explicit_url:
+        return [explicit_url.rstrip("/")]
+
     server_port = os.getenv("GRADING_SERVER_PORT", "5005")
-    return [f"http://127.0.0.1:{server_port}"]
+    use_legacy_server = os.getenv("MLEVOLVE_USE_LOCAL_VALIDATION_SERVER", "0") == "1"
+    if use_legacy_server:
+        return [f"http://127.0.0.1:{server_port}"]
+
+    return ["http://127.0.0.1:5000"]
 
 
 server_url_list = get_server_url_list()
@@ -46,6 +90,11 @@ def is_server_online(max_retries=3, timeout=300):
                 logger.warning(f"Server returned non-200 status code: {response.status_code}")
                 logger.warning(f"Response body: {response.text[:500]}")
                 logger.warning(f"Response headers: {dict(response.headers)}")
+                if response.status_code in {404, 405}:
+                    logger.info(
+                        f"Server {server_url} does not expose /health, assuming validation endpoint may still be available."
+                    )
+                    return True, server_url
 
         except requests.exceptions.Timeout:
             timeout += 20
@@ -75,8 +124,13 @@ def call_validate(exp_id, submission_path, timeout=300, max_retries=3):
             if online:
                 with open(submission_path, "rb") as f:
                     files = {"file": f}
-                    response = requests.post(f"{server_url}/validate", files=files, headers={"exp-id": exp_id}, timeout=timeout)
-                response_json = response.json()
+                    response = requests.post(
+                        f"{server_url}/validate",
+                        files=files,
+                        headers={"exp-id": exp_id},
+                        timeout=timeout,
+                    )
+                response_json = _extract_validate_response(response)
                 if "error" in response_json:
                     logger.error(f"Server returned error: {response.text}")
                     return False, response_json['details']

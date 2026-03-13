@@ -1,17 +1,17 @@
 # ============================================================
 #  Data & paths
 # ============================================================
-data_dir: null
-dataset_dir: ""  # path to mle-bench dataset root, e.g. /data/mle-bench
-desc_file: null
+data_dir: /mle-bench/data/denoising-dirty-documents/prepared/public/
+# dataset_dir: ""  # path to mle-bench dataset root, e.g. /data/mle-bench
+desc_file: /mle-bench/data/denoising-dirty-documents/prepared/public/description.md
 goal: null
 eval: null
 exp_name: null
 exp_id: ""
 
-log_dir: ./runs
+log_dir: /home/nonroot/runs
 log_level: INFO
-workspace_dir: ./runs
+workspace_dir: /home/nonroot/runs
 preprocess_data: True
 copy_data: False
 
@@ -29,6 +29,7 @@ pretrain_model_dir: ""  # path to pretrained model weights, e.g. /data/pretrain_
 exec:
   timeout: 32400
   agent_file_name: runfile.py
+  python_cmd: ["micromamba", "run", "-n", "ml", "python3"]
 
 # ============================================================
 #  Agent config
@@ -44,15 +45,15 @@ agent:
 
   # --- LLM models ---
   code:
-    model: gemini-3-pro-preview
+    model: hosted_vllm/openai/gpt-oss-120b
     temp: 1
-    base_url: ""   # Gemini API endpoint
-    api_key: ""    # Gemini API key
+    base_url: "http://host.docker.internal:8000/v1"   # Local OpenAI-compatible endpoint
+    api_key: "dummy"
   feedback:
-    model: gemini-3-pro-preview
+    model: hosted_vllm/openai/gpt-oss-120b
     temp: 1
-    base_url: ""   # Gemini API endpoint
-    api_key: ""    # Gemini API key
+    base_url: "http://host.docker.internal:8000/v1"   # Local OpenAI-compatible endpoint
+    api_key: "dummy"
 
   # --- Submission check ---
   check_data_leakage: True

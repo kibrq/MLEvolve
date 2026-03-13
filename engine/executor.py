@@ -64,6 +64,7 @@ class Interpreter:
             cfg.agent.search.parallel_search_num if (cfg and getattr(cfg.agent.search, "parallel_search_num", None)) else max_parallel_run
         )
         self.agent_file_name = [f"runfile_{i}.py" for i in range(self.max_parallel_run)]
+        self.python_cmd = list(getattr(cfg.exec, "python_cmd", ["python3"])) if cfg else ["python3"]
         self.current_parallel_run = 0
         self.status_map = [0] * self.max_parallel_run
         self.start_cpu_id = int(cfg.start_cpu_id) if cfg else 0
@@ -217,7 +218,7 @@ class Interpreter:
             with open(runfile_path, "w") as f:
                 f.write(code)
 
-            cmd = [sys.executable, str(runfile_path)]
+            cmd = [*self.python_cmd, str(runfile_path)]
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(run_wd),
@@ -384,5 +385,4 @@ class Interpreter:
                 if process_id is not None:
                     self.status_map[process_id] = 0
                     self.current_parallel_run -= 1
-
 
