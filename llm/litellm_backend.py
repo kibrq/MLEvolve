@@ -136,6 +136,10 @@ def query(
     **model_kwargs,
 ) -> tuple[OutputType, float, int, int, dict]:
     filtered_kwargs: dict = select_values(notnone, model_kwargs)  # type: ignore
+    reasoning_effort = filtered_kwargs.get(
+        "reasoning_effort",
+        getattr(cfg.agent.feedback, "reasoning_effort", None) if cfg else None,
+    )
     request: dict[str, Any] = {
         "model": filtered_kwargs.get("model", "gemini/gemini-3-pro-preview"),
         "messages": _build_messages(system_message, user_message),
@@ -143,6 +147,8 @@ def query(
         "max_tokens": filtered_kwargs.get("max_tokens", 16384),
         **_client_kwargs(cfg.agent.feedback.base_url, cfg.agent.feedback.api_key),
     }
+    if reasoning_effort is not None:
+        request["reasoning_effort"] = reasoning_effort
 
     if func_spec is not None:
         request["tools"] = [func_spec.as_openai_tool_dict]
@@ -185,6 +191,7 @@ def generate(
 
     for attempt in range(max_retries):
         try:
+            reasoning_effort = getattr(cfg.agent.code, "reasoning_effort", None)
             request: dict[str, Any] = {
                 "model": cfg.agent.code.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -193,6 +200,8 @@ def generate(
                 "stream": True,
                 **_client_kwargs(cfg.agent.code.base_url, cfg.agent.code.api_key),
             }
+            if reasoning_effort is not None:
+                request["reasoning_effort"] = reasoning_effort
             if stop_tokens:
                 request["stop"] = stop_tokens
             if json_schema is not None:
