@@ -209,6 +209,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             "- But ask yourself: Could I improve the current approach by adding/modifying instead of replacing?",
             "",
             "- Your plan should be concise but comprehensive: Must address WHY/HOW/WHAT (2-4 sentences each). Avoid verbosity - every sentence should add new insight. Natural length: around 8-12 sentences for a complete reasoning process.\n",
+            "- Don't suggest to do EDA.\n",
         ],
     }
 

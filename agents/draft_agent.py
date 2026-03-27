@@ -89,6 +89,7 @@ def run(agent) -> SearchNode:
             "- Your plan should be concise but comprehensive: Must address WHAT/WHY/HOW (2-4 sentences each). Avoid verbosity - every sentence should add new insight. Natural length: around 8-12 sentences for a complete reasoning process.\n",
             "- Propose an evaluation metric that is reasonable for this task.\n",
             "- The data is already prepared in `./input` directory. No need to unzip files.\n",
+            "- Don't suggest to do EDA.\n",
         ],
         "Coding & Execution Guidelines (CRITICAL)": [
             "- **NO PROGRESS BARS**: You MUST NOT use `tqdm`. Assume `tqdm` is not installed. Use standard Python loops only. Do not use `verbose=1`.",

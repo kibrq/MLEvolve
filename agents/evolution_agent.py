@@ -180,6 +180,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             "- Your improvement must be distinctly different from existing attempts in the Memory section.\n",
             "- Pay special attention to the Branch Evolution History section, which shows the evolution path of your current approach. From this historical trajectory, extract both successful patterns and failed experiences to guide your improvement strategy.\n",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY previous changes worked/failed, HOW you'll build on that, WHAT you'll change).\n",
+            "- Don't suggest to do EDA.\n",
         ],
     }
     prompt["Instructions"] |= ROBUSTNESS_GENERALIZATION_STRATEGY

@@ -105,6 +105,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         "Bugfix improvement sketch guideline": [
             "- You should write a brief natural language description (2-3 sentences) of how the issue in the previous implementation can be fixed.\n",
             "- Most libraries are stable and available. The bug is not caused by the library version mismatch. **Don't suggest to reinstall the core libraries.** (like pip install torch, pip upgrade transformers, !pip install tensorflow, subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'transformers', 'accelerate', 'pandas', 'torch', 'torchvision']))\n",
+            "- Don't suggest to do EDA.\n",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)

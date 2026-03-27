@@ -122,6 +122,7 @@ def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> S
             "- The improvement should be thoughtful and selective, choosing only techniques that address a specific limitation in your solution rather than simply combining approaches.",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY reference succeeded, HOW it applies to you, WHAT you'll incorporate).",
             "- The final code should be a single, runnable Python script.",
+            "- Do not suggest to do EDA.",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)
@@ -304,6 +305,7 @@ def _fuse_with_multiple_references(
             "- The improvement should be thoughtful and selective, choosing the single technique that best addresses a specific limitation in your solution rather than combining multiple approaches.",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY each reference succeeded, HOW they apply to you, WHAT you'll incorporate).",
             "- The final code should be a single, runnable Python script.",
+            "- Do not suggest to do EDA.",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)

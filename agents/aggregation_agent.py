@@ -132,6 +132,7 @@ def run(
                 "- The solution should be distinct and innovative, combining the best ideas in a novel way.",
                 "- Focus on discovering new synergies between successful techniques from different branches.",
                 "- The final code should be a single, runnable Python script.",
+                "- Do not suggest to do EDA.",
             ],
         }
     else:
@@ -146,6 +147,7 @@ def run(
                 "- The solution should be distinct and innovative, inspired by successful evolution patterns.",
                 "- Focus on discovering unexplored directions suggested by the evolution insights from multiple branches.",
                 "- The final code should be a single, runnable Python script.",
+                "- Do not suggest to do EDA.",
             ],
         }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)
