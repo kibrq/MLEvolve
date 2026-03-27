@@ -1,6 +1,6 @@
 """configuration and setup utils"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
@@ -35,6 +35,16 @@ class StageConfig:
     temp: float
     base_url: str
     api_key: str
+    reasoning_effort: str | None = None
+
+
+@dataclass
+class CodegenConfig:
+    provider: str = "llm"
+    opencode_command: list[str] = field(default_factory=lambda: ["opencode", "exec"])
+    opencode_timeout_seconds: int = 600
+    max_codegen_session_timeout_seconds: int = 180
+    max_retry_per_opencode_session: int = 2
 
 @dataclass
 class DecayConfig:
@@ -87,6 +97,7 @@ class AgentConfig:
     data_preview: bool
     code: StageConfig
     feedback: StageConfig
+    codegen: CodegenConfig
     check_data_leakage: bool
     fusion_vs_evolution_prob: float
     branch_fusion_trigger_prob: float
@@ -98,6 +109,9 @@ class AgentConfig:
     search: SearchConfig
     decay: DecayConfig
     use_diff_mode: bool = True
+    use_stepwise_generation: bool = True
+
+
 @dataclass
 class ExecConfig:
     timeout: int

@@ -88,7 +88,6 @@ def run(agent) -> SearchNode:
             "- Don't propose the same modelling solution but keep the evaluation the same.\n",
             "- Your plan should be concise but comprehensive: Must address WHAT/WHY/HOW (2-4 sentences each). Avoid verbosity - every sentence should add new insight. Natural length: around 8-12 sentences for a complete reasoning process.\n",
             "- Propose an evaluation metric that is reasonable for this task.\n",
-            "- Don't suggest to do EDA.\n",
             "- The data is already prepared in `./input` directory. No need to unzip files.\n",
         ],
         "Coding & Execution Guidelines (CRITICAL)": [
@@ -151,7 +150,20 @@ def run(agent) -> SearchNode:
             },
         )
     else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction,
+                "task_description": prompt["Task description"],
+                "memory": prompt.get("Memory", ""),
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "assistant_context": "Let me approach this systematically.\nFirst, I'll examine the dataset:\n"
+                + agent.data_preview,
+            },
+        )
     new_node = SearchNode(plan=plan, code=code, parent=agent.virtual_root, stage="draft",
                         local_best_node=agent.virtual_root)
     register_node(agent, new_node, prompt_complete, new_branch=True)

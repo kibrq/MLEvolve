@@ -1,9 +1,10 @@
 import logging
 from typing import Any, List, Tuple
 
-from llm import compile_prompt_to_md, generate
+from llm import compile_prompt_to_md
 from engine.search_node import SearchNode
 from agents.coder import plan_and_code_query
+from agents.coder.providers import generate_code
 from utils.response import extract_plan_from_diff_response, wrap_code
 from agents.prompts import (
     ROBUSTNESS_GENERALIZATION_STRATEGY,
@@ -103,7 +104,6 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
     prompt["Instructions"] |= {
         "Bugfix improvement sketch guideline": [
             "- You should write a brief natural language description (2-3 sentences) of how the issue in the previous implementation can be fixed.\n",
-            "- Don't suggest to do EDA.\n",
             "- Most libraries are stable and available. The bug is not caused by the library version mismatch. **Don't suggest to reinstall the core libraries.** (like pip install torch, pip upgrade transformers, !pip install tensorflow, subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'transformers', 'accelerate', 'pandas', 'torch', 'torchvision']))\n",
         ],
     }
@@ -189,10 +189,30 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
 
                 prompt_with_diff = build_prompt_complete(diff_instructions_retry)
 
-                response = generate(
-                    prompt=prompt_with_diff,
-                    temperature=agent.acfg.code.temp,
-                    cfg=agent.cfg
+                response = generate_code(
+                    agent,
+                    prompt_with_diff,
+                    mode="debug_diff",
+                    input_artifacts={
+                        "prompt": prompt_with_diff,
+                        "introduction": introduction_base,
+                        "task_description": agent.task_desc,
+                        "instructions": prompt["Instructions"],
+                        "data_preview": agent.data_preview,
+                        "parent_code": current_code,
+                        "execution_output": parent_node.term_out,
+                        "bug_analysis": parent_node.analysis,
+                        "previous_buggy_implementation": prompt["Previous (buggy) implementation"],
+                        "assistant_context": (
+                            "Let me approach this systematically.\n"
+                            f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                            f"The code that needs fixing:\n{prompt['Previous (buggy) implementation']}\n"
+                            f"The error/issue encountered:\n{prompt['Execution output']}\n"
+                            f"Analyzing the root cause: {parent_node.analysis}\n"
+                            "I'll now fix this issue."
+                        ),
+                    },
+                    metadata={"parent_node_id": parent_node.id, "retry_idx": retry_idx},
                 )
 
                 if response and ("<<<<<<< SEARCH" in response or "< SEARCH" in response or "<<<<<<<" in response):
@@ -290,7 +310,28 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
     if code is None:
         logger.info(f"Falling back to full code rewrite debugging method for node {parent_node.id}")
         prompt_complete = build_prompt_complete(base_instructions, use_full_code_requirement=True)
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction_base + full_code_requirement,
+                "task_description": prompt["Task description"],
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "previous_buggy_implementation": prompt["Previous (buggy) implementation"],
+                "execution_output": parent_node.term_out,
+                "bug_analysis": parent_node.analysis,
+                "assistant_context": (
+                    "Let me approach this systematically.\n"
+                    f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                    f"The code that needs fixing:\n{prompt['Previous (buggy) implementation']}\n"
+                    f"The error/issue encountered:\n{prompt['Execution output']}\n"
+                    f"Analyzing the root cause: {parent_node.analysis}\n"
+                    "I'll now fix this issue."
+                ),
+            },
+        )
 
     from_topk = getattr(parent_node, '_topk_triggered', False)
 

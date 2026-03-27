@@ -1,0 +1,91 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "enabled_providers": ["custom"],
+  "default_agent": "build",
+  "agent": {
+    "build": {
+      "prompt": "{file:SYSTEM.md}",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": {
+          "*": "allow",
+          "chmod *": "deny",
+          "python": "deny",
+          "python *": "deny",
+          "python3": "deny",
+          "python3 *": "deny",
+          "micromamba *": "deny",
+          "conda *": "deny"
+        },
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "external_directory": "deny"
+      }
+    },
+    "review": {
+      "prompt": "{file:REVIEWER_SYSTEM.md}",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": {
+          "*": "allow",
+          "chmod *": "deny",
+          "python": "deny",
+          "python *": "deny",
+          "python3": "deny",
+          "python3 *": "deny",
+          "micromamba *": "deny",
+          "conda *": "deny"
+        },
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "external_directory": "deny"
+      }
+    }
+  },
+  "mcp": {
+    "python": {
+      "type": "local",
+      "command": [
+        "python3",
+        "{env:MLEVOLVE_OPENCODE_PYTHON_MCP_PATH}"
+      ],
+      "environment": {
+        "MLEVOLVE_OPENCODE_PYTHON_TIMEOUT_MS": "{env:MLEVOLVE_OPENCODE_PYTHON_TIMEOUT_MS}"
+      },
+      "enabled": true,
+      "timeout": 120000
+    }
+  },
+  "provider": {
+    "custom": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MLEvolve Custom Provider",
+      "options": {
+        "baseURL": "{env:MLEVOLVE_OPENCODE_BASE_URL}",
+        "apiKey": "{env:MLEVOLVE_OPENCODE_API_KEY}"
+      },
+      "models": {
+        "{env:MLEVOLVE_OPENCODE_MODEL_ID}": {
+          "name": "{env:MLEVOLVE_OPENCODE_MODEL_NAME}",
+          "reasoning": true,
+          "tool_call": true,
+          "tools": true
+        }
+      }
+    }
+  },
+  "model": "custom/{env:MLEVOLVE_OPENCODE_MODEL_ID}",
+  "small_model": "custom/{env:MLEVOLVE_OPENCODE_MODEL_ID}"
+}

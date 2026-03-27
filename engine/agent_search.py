@@ -54,7 +54,7 @@ class AgentSearch:
         self.journal_lock = threading.Lock()
         self.save_node_lock = threading.Lock()
         self.start_time = time.time()
-        self.use_stepwise_generation = True
+        self.use_stepwise_generation = bool(getattr(cfg.agent, "use_stepwise_generation", True))
 
         self.next_branch_id = 1
         self.branch_all_nodes: Dict[int, List[SearchNode]] = {}

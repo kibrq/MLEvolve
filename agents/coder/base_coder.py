@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Tuple
 
-from llm import generate
+from .providers import generate_code
 from utils.response import extract_code, extract_text_up_to_code
 
 logger = logging.getLogger("MLEvolve")
@@ -30,15 +30,17 @@ RESPONSE_FORMAT = {
 def plan_and_code_query(
     agent_instance,
     prompt,
+    input_artifacts: dict | None = None,
     retries: int = 3,
 ) -> Tuple[str, str]:
     """Generate plan + code in one LLM call; returns (nl_text, code). On failure returns ("", raw_completion_text)."""
     completion_text = None
     for _ in range(retries):
-        completion_text = generate(
-            prompt=prompt,
-            temperature=agent_instance.acfg.code.temp,
-            cfg=agent_instance.cfg,
+        completion_text = generate_code(
+            agent_instance,
+            prompt,
+            mode="full",
+            input_artifacts=input_artifacts or {"prompt": prompt},
         )
         code = extract_code(completion_text)
         nl_text = extract_text_up_to_code(completion_text)
@@ -46,7 +48,8 @@ def plan_and_code_query(
         if code and nl_text:
             return nl_text, code
 
-        logger.debug("Extraction retry...")
+        logger.warning("Extraction retry...")
+        logger.debug(completion_text)
 
     logger.warning("Code extraction failed after retries")
     return "", completion_text  # type: ignore

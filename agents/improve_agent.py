@@ -209,7 +209,6 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             "- But ask yourself: Could I improve the current approach by adding/modifying instead of replacing?",
             "",
             "- Your plan should be concise but comprehensive: Must address WHY/HOW/WHAT (2-4 sentences each). Avoid verbosity - every sentence should add new insight. Natural length: around 8-12 sentences for a complete reasoning process.\n",
-            "- Don't suggest to do EDA.\n",
         ],
     }
 
@@ -242,9 +241,49 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             plan, code = _diff_improve(agent, prompt, agent.data_preview, parent_node)
         except Exception as e:
             logger.warning(f"Diff improve failed: {e}, falling back to full rewrite")
-            plan, code = plan_and_code_query(agent, prompt_complete)
+            plan, code = plan_and_code_query(
+                agent,
+                prompt_complete,
+                input_artifacts={
+                    "prompt": prompt_complete,
+                    "introduction": introduction,
+                    "task_description": prompt["Task description"],
+                    "memory": prompt.get("Memory", ""),
+                    "instructions": prompt["Instructions"],
+                    "data_preview": agent.data_preview,
+                    "previous_solution": prompt["Previous solution"],
+                    "execution_output": parent_node.term_out,
+                    "assistant_context": (
+                        "Let me approach this systematically.\n"
+                        f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                        f"The current solution uses the following code:\n{prompt['Previous solution']['Code']}\n"
+                        f"Its output was:\n{output}\n"
+                        "Building on this, I'll develop an improved approach."
+                    ),
+                },
+            )
     else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction,
+                "task_description": prompt["Task description"],
+                "memory": prompt.get("Memory", ""),
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "previous_solution": prompt["Previous solution"],
+                "execution_output": parent_node.term_out,
+                "assistant_context": (
+                    "Let me approach this systematically.\n"
+                    f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                    f"The current solution uses the following code:\n{prompt['Previous solution']['Code']}\n"
+                    f"Its output was:\n{output}\n"
+                    "Building on this, I'll develop an improved approach."
+                ),
+            },
+        )
 
     from_topk = getattr(parent_node, '_topk_triggered', False)
 

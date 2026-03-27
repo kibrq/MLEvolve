@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Any, Tuple, Union
 
-from llm import generate
+from agents.coder.providers import generate_code
 from .prompts import build_base_diff_instructions, build_diff_format_suffix, DIFF_SYS_FORMAT
 from .apply import apply_diff_with_retry, format_planning_result_for_plan
 
@@ -62,10 +62,24 @@ def diff_generate_and_apply(
     diff_prompt = _build_diff_model_prompt(model_name, introduction, user_prompt, assistant_text)
 
     logger.info("Calling LLM to generate diff...")
-    diff_response = generate(
-        prompt=diff_prompt,
-        temperature=agent_instance.acfg.code.temp,
-        cfg=agent_instance.cfg,
+    diff_response = generate_code(
+        agent_instance,
+        diff_prompt,
+        mode="diff",
+        input_artifacts={
+            "prompt": diff_prompt,
+            "introduction": introduction,
+            "improvement_plan": plan_text,
+            "extra_user_sections": extra_user_sections,
+            "diff_instructions": diff_instructions,
+            "assistant_context": assistant_text,
+            "data_preview": data_preview,
+            "parent_code": parent_code,
+            "execution_output": execution_output,
+            "planning_result": plan_text,
+            "memory": extra_context,
+        },
+        metadata={"model_name": model_name},
     )
 
     def regenerate_fn(current_code: str, retry_note: str) -> str:
@@ -80,10 +94,24 @@ def diff_generate_and_apply(
                 new_prompt["user"] = retry_note + "\n\n" + new_prompt["user"]
             elif isinstance(new_prompt, str):
                 new_prompt = retry_note + "\n\n" + new_prompt
-        return generate(
-            prompt=new_prompt,
-            temperature=agent_instance.acfg.code.temp,
-            cfg=agent_instance.cfg,
+        return generate_code(
+            agent_instance,
+            new_prompt,
+            mode="diff",
+            input_artifacts={
+                "prompt": new_prompt,
+                "introduction": introduction,
+                "improvement_plan": plan_text,
+                "extra_user_sections": extra_user_sections,
+                "diff_instructions": diff_instructions,
+                "assistant_context": new_assistant,
+                "data_preview": data_preview,
+                "parent_code": current_code,
+                "execution_output": execution_output,
+                "planning_result": plan_text,
+                "memory": extra_context,
+            },
+            metadata={"model_name": model_name, "retry_note": retry_note},
         )
 
     final_code, total_applied, _ = apply_diff_with_retry(

@@ -2,9 +2,9 @@ FROM mlebench-env:latest
 
 ENV NONROOT_USER=nonroot
 ENV NONROOT_HOME=/home/nonroot
-ENV MLEVOLVE_ENV_NAME=mlevolve
+ENV MLEVOLVE_ENV_NAME=MLEvolve
 ENV MLEVOLVE_PYTHON_VERSION=3.11
-ENV MLEVOLVE_HOME=${NONROOT_HOME}/MLEvolve-lib
+ENV MLEVOLVE_HOME=${NONROOT_HOME}/MLEvolve
 
 USER ${NONROOT_USER}
 
@@ -22,6 +22,9 @@ RUN micromamba run -n "${MLEVOLVE_ENV_NAME}" pip install --no-cache-dir --no-dep
 RUN micromamba run -n "${MLEVOLVE_ENV_NAME}" pip install --no-cache-dir --no-deps -r requirements_ml.txt
 # RUN micromamba run -n "${MLEVOLVE_ENV_NAME}" pip install --no-cache-dir --no-deps -r requirements_domain.txt \
 RUN micromamba clean --all --yes
+
+RUN micromamba install -n "${MLEVOLVE_ENV_NAME}" nodejs
+RUN micromamba run -n "${MLEVOLVE_ENV_NAME}" npm install opencode-ai
 
 # entrypoint in mlebench-env:latest requires root
 USER root

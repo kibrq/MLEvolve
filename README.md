@@ -68,6 +68,8 @@ agent:
 
 Other tunable fields (`agent.steps`, `agent.time_limit`, etc.) have sensible defaults — see comments in the yaml file.
 
+For LiteLLM/OpenAI-compatible backends, you can also set `agent.code.reasoning_effort` and `agent.feedback.reasoning_effort` in `config/config.yaml`. If left `null`, MLEvolve sends no explicit reasoning-effort setting and the backend default is used.
+
 ### Cold-Start Models (optional)
 
 Cold-start recommends pretrained models per task category based on `engine/coldstart/models_guidance_classified.json`. Most models auto-download from HuggingFace; for models requiring local weights, set `torch_hub_dir` in `config.yaml`. To disable cold-start entirely, set `coldstart.use_coldstart: False`.

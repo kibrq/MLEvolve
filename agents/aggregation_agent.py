@@ -132,7 +132,6 @@ def run(
                 "- The solution should be distinct and innovative, combining the best ideas in a novel way.",
                 "- Focus on discovering new synergies between successful techniques from different branches.",
                 "- The final code should be a single, runnable Python script.",
-                "- Do not suggest to do EDA.",
             ],
         }
     else:
@@ -147,7 +146,6 @@ def run(
                 "- The solution should be distinct and innovative, inspired by successful evolution patterns.",
                 "- Focus on discovering unexplored directions suggested by the evolution insights from multiple branches.",
                 "- The final code should be a single, runnable Python script.",
-                "- Do not suggest to do EDA.",
             ],
         }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)
@@ -170,7 +168,19 @@ def run(
     )
     prompt_complete = f"{introduction}\n\n{user_prompt}\n\n{assistant_prefix}"
 
-    plan, code = plan_and_code_query(agent, prompt_complete)
+    plan, code = plan_and_code_query(
+        agent,
+        prompt_complete,
+        input_artifacts={
+            "prompt": prompt_complete,
+            "introduction": introduction,
+            "task_description": prompt["Task description"],
+            "branch_experiences": prompt["Branch Experiences"],
+            "instructions": prompt["Instructions"],
+            "data_preview": data_preview,
+            "assistant_context": assistant_prefix,
+        },
+    )
 
     aggregation_node = SearchNode(
         plan=plan,

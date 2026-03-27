@@ -122,7 +122,6 @@ def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> S
             "- The improvement should be thoughtful and selective, choosing only techniques that address a specific limitation in your solution rather than simply combining approaches.",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY reference succeeded, HOW it applies to you, WHAT you'll incorporate).",
             "- The final code should be a single, runnable Python script.",
-            "- Do not suggest to do EDA.",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)
@@ -142,9 +141,51 @@ def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> S
             plan, code = _diff_fusion(agent, prompt, agent.data_preview, source_node)
         except Exception as e:
             logger.warning(f"Diff fusion failed: {e}, falling back to full fusion")
-            plan, code = plan_and_code_query(agent, prompt_complete)
+            plan, code = plan_and_code_query(
+                agent,
+                prompt_complete,
+                input_artifacts={
+                    "prompt": prompt_complete,
+                    "introduction": introduction,
+                    "task_description": prompt["Task description"],
+                    "current_solution": prompt["Current Solution"],
+                    "reference_solution": prompt["Reference Solution"],
+                    "instructions": prompt["Instructions"],
+                    "data_preview": agent.data_preview,
+                    "assistant_context": (
+                        "Let me approach this systematically.\n"
+                        f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                        f"My current solution:\nPlan: {prompt['Current Solution']['Plan']}\n"
+                        f"Code: {prompt['Current Solution']['Code']}\n"
+                        f"Performance: {prompt['Current Solution']['Performance']}\n"
+                        f"Analysis: {prompt['Current Solution']['Analysis']}\n"
+                        "I'll now analyze the reference solution and selectively incorporate its best ideas."
+                    ),
+                },
+            )
     else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction,
+                "task_description": prompt["Task description"],
+                "current_solution": prompt["Current Solution"],
+                "reference_solution": prompt["Reference Solution"],
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "assistant_context": (
+                    "Let me approach this systematically.\n"
+                    f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                    f"My current solution:\nPlan: {prompt['Current Solution']['Plan']}\n"
+                    f"Code: {prompt['Current Solution']['Code']}\n"
+                    f"Performance: {prompt['Current Solution']['Performance']}\n"
+                    f"Analysis: {prompt['Current Solution']['Analysis']}\n"
+                    "I'll now analyze the reference solution and selectively incorporate its best ideas."
+                ),
+            },
+        )
 
     from_topk = getattr(source_node, '_topk_triggered', False)
 
@@ -263,7 +304,6 @@ def _fuse_with_multiple_references(
             "- The improvement should be thoughtful and selective, choosing the single technique that best addresses a specific limitation in your solution rather than combining multiple approaches.",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY each reference succeeded, HOW they apply to you, WHAT you'll incorporate).",
             "- The final code should be a single, runnable Python script.",
-            "- Do not suggest to do EDA.",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)
@@ -283,9 +323,51 @@ def _fuse_with_multiple_references(
             plan, code = _diff_multi_fusion(agent, prompt, agent.data_preview, parent_node)
         except Exception as e:
             logger.warning(f"Diff multi-fusion failed: {e}, falling back to full rewrite")
-            plan, code = plan_and_code_query(agent, prompt_complete)
+            plan, code = plan_and_code_query(
+                agent,
+                prompt_complete,
+                input_artifacts={
+                    "prompt": prompt_complete,
+                    "introduction": introduction,
+                    "task_description": prompt["Task description"],
+                    "current_solution": prompt["Current Solution"],
+                    "reference_solutions": prompt["Reference Solutions"],
+                    "instructions": prompt["Instructions"],
+                    "data_preview": agent.data_preview,
+                    "assistant_context": (
+                        "Let me approach this systematically.\n"
+                        f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                        f"My current solution:\nPlan: {prompt['Current Solution']['Plan']}\n"
+                        f"Code: {prompt['Current Solution']['Code']}\n"
+                        f"Performance: {prompt['Current Solution']['Performance']}\n"
+                        f"Analysis: {prompt['Current Solution']['Analysis']}\n"
+                        "I'll now analyze the reference solutions and selectively incorporate the best ideas."
+                    ),
+                },
+            )
     else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction,
+                "task_description": prompt["Task description"],
+                "current_solution": prompt["Current Solution"],
+                "reference_solutions": prompt["Reference Solutions"],
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "assistant_context": (
+                    "Let me approach this systematically.\n"
+                    f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                    f"My current solution:\nPlan: {prompt['Current Solution']['Plan']}\n"
+                    f"Code: {prompt['Current Solution']['Code']}\n"
+                    f"Performance: {prompt['Current Solution']['Performance']}\n"
+                    f"Analysis: {prompt['Current Solution']['Analysis']}\n"
+                    "I'll now analyze the reference solutions and selectively incorporate the best ideas."
+                ),
+            },
+        )
 
     from_topk = getattr(parent_node, '_topk_triggered', False)
 

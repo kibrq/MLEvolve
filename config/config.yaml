@@ -42,6 +42,7 @@ agent:
   initial_drafts: 3
   seed: 42
   data_preview: True
+  use_stepwise_generation: True
 
   # --- LLM models ---
   code:
@@ -49,11 +50,19 @@ agent:
     temp: 1
     base_url: "http://host.docker.internal:8000/v1"   # Local OpenAI-compatible endpoint
     api_key: "dummy"
+    reasoning_effort: null
   feedback:
     model: hosted_vllm/openai/gpt-oss-120b
     temp: 1
     base_url: "http://host.docker.internal:8000/v1"   # Local OpenAI-compatible endpoint
     api_key: "dummy"
+    reasoning_effort: null
+  codegen:
+    provider: llm
+    opencode_command: ["opencode", "exec"]
+    opencode_timeout_seconds: 600
+    max_codegen_session_timeout_seconds: 180
+    max_retry_per_opencode_session: 2
 
   # --- Submission check ---
   check_data_leakage: True

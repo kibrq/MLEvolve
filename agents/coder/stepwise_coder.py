@@ -15,7 +15,8 @@ import logging
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any
 
-from llm import generate, compile_prompt_to_md
+from llm import compile_prompt_to_md
+from agents.coder.providers import generate_code
 from utils.response import extract_code, extract_text_up_to_code, wrap_code
 from agents.planner.base_planner import (
     PLANNING_ALLOWED_MODULES,
@@ -69,10 +70,28 @@ class StepAgent:
 
         completion_text = None
         for _ in range(retries):
-            completion_text = generate(
-                prompt=prompt,
-                temperature=agent_instance.acfg.code.temp,
-                cfg=agent_instance.cfg
+            completion_text = generate_code(
+                agent_instance,
+                prompt,
+                mode="stepwise",
+                input_artifacts={
+                    "prompt": prompt,
+                    "introduction": prompt_base.get("Introduction", ""),
+                    "task_description": task_desc,
+                    "data_preview": data_preview,
+                    "memory": prompt_base.get("Memory", context.memory if context.memory else ""),
+                    "previous_steps": previous_steps,
+                    "current_step": {
+                        "name": self.name,
+                        "description": self.description,
+                        "guidelines": self.guidelines,
+                    },
+                    "instructions": prompt_base.get("Instructions", {}),
+                    "previous_module_code": previous_module_code,
+                    "improvement_strategy": improvement_strategy,
+                    "assistant_context": prompt,
+                },
+                metadata={"stage": context.stage, "step_name": self.name},
             )
             code = extract_code(completion_text)
             nl_text = extract_text_up_to_code(completion_text)
@@ -80,7 +99,8 @@ class StepAgent:
             if code and nl_text:
                 return nl_text, code
 
-            logger.debug(f"Extraction retry for {self.name}...")
+            logger.warning(f"Extraction retry for {self.name}...")
+            logger.debug(completion_text)
         logger.warning(f"Code extraction failed after retries for {self.name}")
         return "", completion_text  # type: ignore
 
@@ -283,10 +303,22 @@ class MetaAgent:
 
         completion_text = None
         for _ in range(retries):
-            completion_text = generate(
-                prompt=prompt,
-                temperature=agent_instance.acfg.code.temp,
-                cfg=agent_instance.cfg
+            completion_text = generate_code(
+                agent_instance,
+                prompt,
+                mode="stepwise_merge",
+                input_artifacts={
+                    "prompt": prompt,
+                    "introduction": "You are a Kaggle grandmaster attending a competition, an expert in writing clean, efficient, and competition-winning Python code for ML tasks.",
+                    "task_description": task_desc,
+                    "data_preview": data_preview_str,
+                    "memory": prompt_base.get("Memory", context.memory if context.memory else ""),
+                    "step_results": step_results,
+                    "instructions": prompt_base.get("Instructions", {}),
+                    "previous_solution": prompt_base.get("Previous solution", {}),
+                    "assistant_context": prompt,
+                },
+                metadata={"stage": context.stage},
             )
             code = extract_code(completion_text)
             nl_text = extract_text_up_to_code(completion_text)
@@ -294,7 +326,8 @@ class MetaAgent:
             if code and nl_text:
                 return nl_text, code
 
-            logger.debug("Extraction retry for MetaAgent merge...")
+            logger.warning("Extraction retry for MetaAgent merge...")
+            logger.debug(completion_text)
         logger.warning("Code extraction failed after retries for MetaAgent merge")
         return "", completion_text 
 

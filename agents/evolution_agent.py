@@ -180,7 +180,6 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             "- Your improvement must be distinctly different from existing attempts in the Memory section.\n",
             "- Pay special attention to the Branch Evolution History section, which shows the evolution path of your current approach. From this historical trajectory, extract both successful patterns and failed experiences to guide your improvement strategy.\n",
             "- Your plan should be concise but comprehensive, naturally reflecting your reasoning process (WHY previous changes worked/failed, HOW you'll build on that, WHAT you'll change).\n",
-            "- Don't suggest to do EDA.\n",
         ],
     }
     prompt["Instructions"] |= ROBUSTNESS_GENERALIZATION_STRATEGY
@@ -208,9 +207,51 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             plan, code = _diff_evolution(agent, prompt, agent.data_preview, parent_node)
         except Exception as e:
             logger.warning(f"Diff evolution failed: {e}, falling back to full evolution")
-            plan, code = plan_and_code_query(agent, prompt_complete)
+            plan, code = plan_and_code_query(
+                agent,
+                prompt_complete,
+                input_artifacts={
+                    "prompt": prompt_complete,
+                    "introduction": introduction,
+                    "task_description": prompt["Task description"],
+                    "memory": prompt.get("Memory", ""),
+                    "instructions": prompt["Instructions"],
+                    "data_preview": agent.data_preview,
+                    "previous_solution": prompt["Previous solution"],
+                    "branch_evolution_history": prompt["Branch Evolution History"],
+                    "execution_output": parent_node.term_out,
+                    "assistant_context": (
+                        "Let me approach this systematically.\n"
+                        f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                        f"The current solution uses the following code:\n{prompt['Previous solution']['Code']}\n"
+                        f"Its output was:\n{output}\n"
+                        "Building on this and my evolution trajectory, I'll develop an improved approach."
+                    ),
+                },
+            )
     else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+        plan, code = plan_and_code_query(
+            agent,
+            prompt_complete,
+            input_artifacts={
+                "prompt": prompt_complete,
+                "introduction": introduction,
+                "task_description": prompt["Task description"],
+                "memory": prompt.get("Memory", ""),
+                "instructions": prompt["Instructions"],
+                "data_preview": agent.data_preview,
+                "previous_solution": prompt["Previous solution"],
+                "branch_evolution_history": prompt["Branch Evolution History"],
+                "execution_output": parent_node.term_out,
+                "assistant_context": (
+                    "Let me approach this systematically.\n"
+                    f"First, I'll review the dataset:\n{agent.data_preview}\n"
+                    f"The current solution uses the following code:\n{prompt['Previous solution']['Code']}\n"
+                    f"Its output was:\n{output}\n"
+                    "Building on this and my evolution trajectory, I'll develop an improved approach."
+                ),
+            },
+        )
 
     from_topk = getattr(parent_node, '_topk_triggered', False)
 
