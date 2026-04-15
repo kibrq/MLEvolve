@@ -1,6 +1,6 @@
 """configuration and setup utils"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
@@ -112,6 +112,15 @@ class ColdstartConfig:
     model_json_path: str
     description: str
 
+
+@dataclass
+class HiddenValidationConfig:
+    enabled: bool = True
+    competition_name: str = ""
+    allow_self_report_fallback: bool = True
+    hard_fail_on_prepare_error: bool = False
+    stop_after_prepare: bool = False
+
 @dataclass
 class Config(Hashable):
     data_dir: Path
@@ -140,6 +149,7 @@ class Config(Hashable):
     cpu_number: str
 
     coldstart: ColdstartConfig
+    hidden_validation: HiddenValidationConfig = field(default_factory=HiddenValidationConfig)
 
 
 def _get_next_logindex(dir: Path) -> int:
@@ -259,12 +269,28 @@ def load_task_desc(cfg: Config):
 
 def prep_agent_workspace(cfg: Config):
     """Setup the agent's workspace and preprocess data if necessary."""
+    from engine import hidden_validation
+
     (cfg.workspace_dir / "input").mkdir(parents=True, exist_ok=True)
     (cfg.workspace_dir / "working").mkdir(parents=True, exist_ok=True)
     (cfg.workspace_dir / "submission").mkdir(parents=True, exist_ok=True)
+    hidden_state = hidden_validation.prepare_hidden_validation(cfg)
+    if cfg.hidden_validation.stop_after_prepare and (
+        hidden_state.get("active") or hidden_state.get("fallback_mode")
+    ):
+        logger.warning(
+            "Hidden validation preparation finished (active=%s fallback=%s) and stop_after_prepare=True; exiting before search.",
+            hidden_state.get("active"),
+            hidden_state.get("fallback_mode"),
+        )
+        raise SystemExit(0)
 
-    copytree(cfg.data_dir, cfg.workspace_dir / "input", use_symlinks=not cfg.copy_data)
-    if cfg.preprocess_data:
+    source_input_dir = cfg.data_dir
+    if hidden_state.get("active"):
+        source_input_dir = Path(hidden_state["visible_input_dir"])
+
+    copytree(source_input_dir, cfg.workspace_dir / "input", use_symlinks=not cfg.copy_data)
+    if cfg.preprocess_data and not hidden_state.get("active"):
         preproc_data(cfg.workspace_dir / "input")
 
 

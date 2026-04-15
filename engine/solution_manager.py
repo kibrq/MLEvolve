@@ -30,6 +30,11 @@ def write_metric_file(filepath, node, metric_maximize: bool) -> None:
     with open(filepath, "w") as f:
         f.write(f"Metric: {node.metric.value}\n")
         f.write(f"Maximize: {metric_maximize}\n")
+        f.write(f"Metric Source: {getattr(node, 'metric_source', None) or 'unknown'}\n")
+        if getattr(node, "self_reported_metric", None) is not None:
+            f.write(f"Self Reported Metric: {node.self_reported_metric}\n")
+        if getattr(node, "hidden_metric", None) is not None:
+            f.write(f"Hidden Metric: {node.hidden_metric}\n")
 
         if hasattr(node, 'branch_id') and node.branch_id is not None:
             f.write(f"Branch ID: {node.branch_id}\n")

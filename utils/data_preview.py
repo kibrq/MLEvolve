@@ -181,20 +181,34 @@ def generate(base_path, include_file_details=True, simple=False):
 
         if has_validation:
             msg = []
-            msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
-            msg.append(
-                "\n"
-                "In competitions, 'validation' files are NOT always unlabeled test data.\n"
-                "They often contain labels and should be treated as additional training data.\n"
-                "\n"
-                "REQUIRED STEPS:\n"
-                "1. I need check if validation files contain labels (inspect file structure)\n"
-                "2. **If labels exist → I will merge train + validation into one dataset. I will confirm that the original val data has been merged into the training set.**\n"
-                "3. I will Create my own train/val split from the merged data\n"
-                "\n"
-                "This approach maximizes training data and often improves performance.\n"
-                "**Note**: If existing code already implements this strategy, i will skip this step.\n"
-            )
+            if (input_dir / "validation").exists():
+                msg.append("\n**HIDDEN VALIDATION DATA CONTRACT - READ CAREFULLY**")
+                msg.append(
+                    "\n"
+                    "This workspace contains a dedicated `validation/` subtree for search-time evaluation.\n"
+                    "It mirrors the public test-style interface inside a separate `validation/` namespace and must NOT be merged into training.\n"
+                    "\n"
+                    "REQUIRED STEPS:\n"
+                    "1. Train only on the reduced training data that remains in the normal training folders\n"
+                    "2. Run inference on the regular test-style split and save `./submission/submission.csv`\n"
+                    "3. Run inference on `./input/validation` and save `./submission/submission_validation.csv`\n"
+                    "4. Use the same submission schema for both files\n"
+                )
+            else:
+                msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
+                msg.append(
+                    "\n"
+                    "In competitions, 'validation' files are NOT always unlabeled test data.\n"
+                    "They often contain labels and should be treated as additional training data.\n"
+                    "\n"
+                    "REQUIRED STEPS:\n"
+                    "1. I need check if validation files contain labels (inspect file structure)\n"
+                    "2. **If labels exist → I will merge train + validation into one dataset. I will confirm that the original val data has been merged into the training set.**\n"
+                    "3. I will Create my own train/val split from the merged data\n"
+                    "\n"
+                    "This approach maximizes training data and often improves performance.\n"
+                    "**Note**: If existing code already implements this strategy, i will skip this step.\n"
+                )
             
             out.append("\n".join(msg))
             
@@ -276,6 +290,11 @@ def clean_task_desc(task_desc: str, cfg) -> str:
                 submission_format += "=" * 60
 
                 submission_format += "\n**Submission File Location**: Must save the submission to `./submission/submission.csv`\n."
+                if getattr(cfg, "hidden_validation", None) and getattr(cfg.hidden_validation, "enabled", False):
+                    submission_format += (
+                        "\n**Hidden Validation Mode**: Also save `./submission/submission_validation.csv` "
+                        "for the provided validation-style split.\n"
+                    )
 
                 cleaned_desc += submission_format
                 logger.info(f"Added submission format example from {os.path.basename(sample_path)}")

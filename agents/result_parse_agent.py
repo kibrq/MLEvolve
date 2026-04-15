@@ -195,13 +195,18 @@ def _save_code_summary(agent, node: SearchNode, response: dict):
         node.code_summary = None
 
 
-def _determine_buggy(node: SearchNode, response: dict, has_csv_submission: bool):
+def _determine_buggy(
+    node: SearchNode,
+    response: dict,
+    has_csv_submission: bool,
+    require_reported_metric: bool = True,
+):
     failure_reasons = []
     if response["is_bug"]:
         failure_reasons.append("execution error detected")
     if node.exc_type is not None:
         failure_reasons.append(f"exception raised: {node.exc_type}")
-    if response["metric"] is None:
+    if require_reported_metric and response["metric"] is None:
         failure_reasons.append("no metric value reported")
     if not has_csv_submission:
         failure_reasons.append("submission file not found")
@@ -374,7 +379,12 @@ def _save_to_global_memory(agent, node: SearchNode):
             logger.warning(f"[AgentSearch] Failed to save node {node.id} to global memory: {e}")
 
 
-def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
+def run(
+    agent,
+    node: SearchNode,
+    exec_result: ExecutionResult,
+    hidden_metric_report: dict | None = None,
+) -> SearchNode:
     max_retries = 3
     for retry_idx in range(max_retries):
         try:
@@ -411,21 +421,68 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
             metric_val = response.get("metric")
             if not isinstance(metric_val, (int, float)):
                 response["metric"] = None
+            else:
+                node.self_reported_metric = float(metric_val)
 
             has_csv_submission = _check_submission_file(agent, node)
 
             node.analysis = response["summary"]
+            if hidden_metric_report and not hidden_metric_report.get("valid", False):
+                hidden_failure_reason = hidden_metric_report.get("reason", "hidden scoring failed")
+                hidden_error_message = (
+                    "Hidden validation grading FAILED.\n\n"
+                    f"{hidden_failure_reason}\n\n"
+                    "The hidden validation submission did not satisfy the evaluator contract. "
+                    "Inspect how `submission_validation.csv` is generated and ensure it matches the "
+                    "expected schema, row count, ids, and prediction granularity for the validation split."
+                )
+                node._term_out.append(f"\n{hidden_error_message}")
+                node.analysis = (
+                    "HIDDEN_VALIDATION_ERROR: Execution produced a validation submission that "
+                    "failed hidden grading.\n\n"
+                    f"Details:\n{hidden_failure_reason}"
+                )
             _save_code_summary(agent, node, response)
-            _determine_buggy(node, response, has_csv_submission)
+            _determine_buggy(
+                node,
+                response,
+                has_csv_submission,
+                require_reported_metric=hidden_metric_report is None,
+            )
+            if hidden_metric_report and not hidden_metric_report.get("valid", False):
+                node.is_buggy = True
+                logger.warning(
+                    "Node %s marked as buggy due to hidden validation grading failure: %s",
+                    node.id,
+                    hidden_metric_report.get("reason", "hidden scoring failed"),
+                )
 
             if not node.is_buggy:
                 _validate_format_with_retry(agent, node)
 
             if node.is_buggy:
                 node.metric = WorstMetricValue()
+                node.metric_source = node.metric_source or (
+                    "self_reported_fallback"
+                    if getattr(agent, "hidden_validation_state", {}).get("fallback_mode")
+                    else "self_reported"
+                )
             else:
-                _validate_metric_direction(agent, node, response)
-                _check_data_leakage(agent, node, response)
+                if hidden_metric_report and hidden_metric_report.get("valid"):
+                    node.hidden_metric = float(hidden_metric_report["score"])
+                    node.metric = MetricValue(
+                        hidden_metric_report["score"],
+                        maximize=not hidden_metric_report["lower_is_better"],
+                    )
+                    node.metric_source = "hidden_search_val"
+                else:
+                    _validate_metric_direction(agent, node, response)
+                    node.metric_source = node.metric_source or (
+                        "self_reported_fallback"
+                        if getattr(agent, "hidden_validation_state", {}).get("fallback_mode")
+                        else "self_reported"
+                    )
+                    _check_data_leakage(agent, node, response)
 
             status = "FAIL" if node.is_buggy else "PASS"
             metric_val = node.metric.value if node.metric else None

@@ -19,14 +19,14 @@ from agents import (
     code_review_agent,
     result_parse_agent,
 )
-from engine import node_selection, evaluation, execution, solution_manager
+from engine import hidden_validation, node_selection, evaluation, execution, solution_manager
 from engine.conditions import is_branch_stagnant
 from utils.data_preview import clean_task_desc
 
 logger = logging.getLogger("MLEvolve")
 
 
-ExecCallbackType = Callable[[str, bool], ExecutionResult]
+ExecCallbackType = Callable[..., ExecutionResult]
 
 class AgentSearch:
     def __init__(
@@ -82,6 +82,12 @@ class AgentSearch:
         self.metric_maximize: bool | None = None
         self.metric_maximize_reasoning: str | None = None
         result_parse_agent.determine_metric_direction(self)
+        self.hidden_validation_state = hidden_validation.get_runtime_state(cfg)
+        logger.info(
+            "Hidden validation state: active=%s fallback=%s",
+            self.hidden_validation_state.get("active"),
+            self.hidden_validation_state.get("fallback_mode"),
+        )
 
         # Global memory
         self.global_memory = None
@@ -124,7 +130,21 @@ class AgentSearch:
         - The column names in these files are the FINAL AUTHORITY for submission format
         - Always use the column names from the actual sample submission files
         """
-        self.data_preview = base_preview + submission_format_warning
+        hidden_validation_note = ""
+        if self.hidden_validation_state.get("active"):
+            hidden_validation_note = """
+
+        ⚠️  HIDDEN VALIDATION MODE:
+        - `./input` preserves the original public layout and also contains `./input/validation`
+        - Treat `./input/validation` like an additional unlabeled test-style split for evaluation only
+        - The `validation/` subtree mirrors the public inference interface inside a separate namespace; do not invent a different input contract for validation
+        - Do NOT merge validation data into training
+        - Write BOTH files:
+          1. `./submission/submission.csv` for the normal test-style output
+          2. `./submission/submission_validation.csv` for the validation split output
+        - `submission_validation.csv` must use the same schema style as `submission.csv`
+        """
+        self.data_preview = base_preview + submission_format_warning + hidden_validation_note
 
     def is_root(self, node: SearchNode):
         return node.id is self.virtual_root.id
@@ -195,10 +215,14 @@ class AgentSearch:
                         logger.info(f"Node {result_node.id} code generated and reviewed, execution deferred")
                         result_node.pending_execution = True
                         return _root, result_node
-                    exe_res = exec_callback(result_node.code, result_node.id, True)
+                    exe_res, hidden_metric_report = self._execute_with_hidden_validation(
+                        result_node,
+                        exec_callback,
+                    )
                     result_node = result_parse_agent.run(self,
                         node=result_node,
-                        exec_result=exe_res
+                        exec_result=exe_res,
+                        hidden_metric_report=hidden_metric_report,
                     )
                     execution.validate_executed_node(self, result_node)
                     logger.info(f"The metric value of node {result_node.id} is {result_node.metric.value}.")
@@ -269,10 +293,14 @@ class AgentSearch:
         parent_node = node.parent
 
         try:
-            exe_res = exec_callback(node.code, node.id, True)
+            exe_res, hidden_metric_report = self._execute_with_hidden_validation(
+                node,
+                exec_callback,
+            )
             node = result_parse_agent.run(self,
                 node=node,
-                exec_result=exe_res
+                exec_result=exe_res,
+                hidden_metric_report=hidden_metric_report,
             )
 
             execution.validate_executed_node(self, node)
@@ -304,3 +332,24 @@ class AgentSearch:
             evaluation.backpropagate(node=parent_node, value=0, add_to_tree=False)
             parent_node.sub_expected_child_count()
             raise e
+
+    def _execute_with_hidden_validation(
+        self,
+        node: SearchNode,
+        exec_callback: ExecCallbackType,
+    ):
+        visible_exec = exec_callback(node.code, node.id, True)
+        hidden_metric_report = None
+
+        if not self.hidden_validation_state.get("active"):
+            return visible_exec, hidden_metric_report
+        if visible_exec.exc_type is not None:
+            return visible_exec, hidden_metric_report
+        hidden_metric_report = hidden_validation.score_hidden_execution(
+            self.cfg,
+            self.hidden_validation_state,
+            node.id,
+            visible_exec,
+            metric_maximize=self.metric_maximize,
+        )
+        return visible_exec, hidden_metric_report

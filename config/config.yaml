@@ -142,3 +142,10 @@ coldstart:
   task_json_path: "engine/coldstart/competition_tag_classified.json"
   model_json_path: "engine/coldstart/models_guidance_classified.json"
   description: ""
+
+hidden_validation:
+  enabled: True
+  competition_name: ""
+  allow_self_report_fallback: True
+  hard_fail_on_prepare_error: False
+  stop_after_prepare: False

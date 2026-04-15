@@ -16,6 +16,9 @@ def get_impl_guideline_from_agent(agent):
         expose_prediction=getattr(agent.acfg, "expose_prediction", False),
         k_fold_validation=getattr(agent.acfg, "k_fold_validation", 0),
         pretrain_model_dir=getattr(agent.cfg, "pretrain_model_dir", ""),
+        hidden_validation_active=bool(
+            getattr(getattr(agent.cfg, "hidden_validation", None), "enabled", False)
+        ),
     )
 
 
@@ -31,6 +34,7 @@ def get_impl_guideline(
     expose_prediction: bool = False,
     k_fold_validation: int = 0,
     pretrain_model_dir: str = "",
+    hidden_validation_active: bool = False,
 ) -> dict:
     """Build implementation guideline from time and config."""
     impl_guideline = [
@@ -75,6 +79,13 @@ def get_impl_guideline(
         "□ Did I print validation metric as the last line?",
         "□ Did I use the COMPLETE training dataset (not a tiny subset)?",
     ]
+    if hidden_validation_active:
+        impl_guideline[15:15] = [
+            "• Also write: `./submission/submission_validation.csv`",
+            "• Content: Model predictions on ALL provided validation samples under `./input/validation`",
+            "• Format: Must use the same schema style as `submission.csv`",
+            "",
+        ]
     if expose_prediction:
         impl_guideline.append(
             "The implementation should include a predict() function, "
@@ -85,6 +96,14 @@ def get_impl_guideline(
     if k_fold_validation > 1:
         impl_guideline.append(
             f"The evaluation should be based on {k_fold_validation}-fold cross-validation but only if that's an appropriate evaluation for the task at hand."
+        )
+
+    if hidden_validation_active:
+        impl_guideline.extend(
+            [
+                "□ Did I also generate submission_validation.csv in the correct path with ALL validation predictions?",
+                "□ Did validation inference reuse the same preprocessing and prediction logic as test inference?",
+            ]
         )
 
     return {"Implementation guideline": impl_guideline}

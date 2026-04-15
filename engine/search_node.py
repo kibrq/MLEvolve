@@ -47,6 +47,9 @@ class SearchNode(DataClassJsonMixin):
     metric: MetricValue = field(default=None, kw_only=True)  # type: ignore
     is_buggy: bool = field(default=None, kw_only=True)  # type: ignore
     is_valid: bool = field(default=None, kw_only=True)  # type: ignore
+    metric_source: str | None = field(default=None, kw_only=True)
+    self_reported_metric: float | None = field(default=None, kw_only=True)
+    hidden_metric: float | None = field(default=None, kw_only=True)
 
     # ---- search / MCTS ----
     stage: Literal["root", "improve", "debug", "draft", "fusion_draft", "evolution", "fusion"]
