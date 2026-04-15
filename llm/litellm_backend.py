@@ -119,7 +119,14 @@ def _parse_structured_response(response: Any, func_spec: FunctionSpec) -> dict:
         text = _normalize_content(getattr(message, "content", None))
         if not text:
             raise ValueError(f"No structured output returned for function {func_spec.name}")
-        payload = json.loads(text)
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            preview = text[:300].replace("\n", "\\n")
+            raise ValueError(
+                f"Structured output for function {func_spec.name} was not valid JSON. "
+                f"Preview: {preview!r}"
+            ) from exc
 
     if isinstance(payload, list):
         if not payload:
