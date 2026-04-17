@@ -303,8 +303,14 @@ def _build_placeholder_submission(answers_df, sample_template_df, id_column: str
 def _split_df_basic(df, competition_id: str, visible_output: Path):
     from sklearn.model_selection import train_test_split
 
+    stratify = None
     if competition_id == "aerial-cactus-identification":
         test_size = 0.19
+    elif competition_id == "leaf-classification":
+        # Leaf has 99 classes and only 891 training rows, so use a larger
+        # stratified holdout to keep the hidden validation split representative.
+        test_size = 0.2
+        stratify = df["species"]
     elif competition_id == "new-york-city-taxi-fare-prediction":
         test_size = min(9914, max(1, len(df) // 10))
     elif competition_id == "tabular-playground-series-may-2022":
@@ -314,7 +320,7 @@ def _split_df_basic(df, competition_id: str, visible_output: Path):
         test_size = max(1, min(len(df) - 1, existing_test))
     else:
         test_size = 0.1
-    return train_test_split(df, test_size=test_size, random_state=0)
+    return train_test_split(df, test_size=test_size, random_state=0, stratify=stratify)
 
 
 def _split_asset_dir_with_ids(
@@ -339,8 +345,19 @@ def _split_asset_dir_with_ids(
         for suffix in suffixes:
             if suffix.startswith("/"):
                 candidate = backup_dir / item_id / suffix.lstrip("/")
-            else:
-                candidate = backup_dir / f"{item_id}{suffix}"
+                if candidate.exists():
+                    return candidate
+                continue
+
+            # Some prepared datasets already store the full filename, including
+            # extension, in the id column (for example aerial-cactus ids end in
+            # ".jpg"). Prefer the exact filename first, then fall back to
+            # appending the configured suffix for extension-less ids.
+            exact_candidate = backup_dir / item_id
+            if exact_candidate.exists():
+                return exact_candidate
+
+            candidate = backup_dir / f"{item_id}{suffix}"
             if candidate.exists():
                 return candidate
         return None
@@ -601,8 +618,13 @@ def _prepare_random_pizza_second_split(visible_output, validation_dir, hidden_an
         train_samples = json.load(f)
     with (visible_output / "test.json").open() as f:
         current_test_samples = json.load(f)
-    test_ratio = len(current_test_samples) / max(1, len(train_samples) + len(current_test_samples))
-    keep_samples, val_samples = train_test_split(train_samples, test_size=test_ratio, random_state=0)
+    stratify_labels = [int(sample["requester_received_pizza"]) for sample in train_samples]
+    keep_samples, val_samples = train_test_split(
+        train_samples,
+        test_size=0.2,
+        random_state=0,
+        stratify=stratify_labels,
+    )
     test_fields = list(current_test_samples[0].keys()) if current_test_samples else [k for k in keep_samples[0].keys() if k != "requester_received_pizza"]
     with (visible_output / "train.json").open("w") as f:
         json.dump(keep_samples, f, indent=4)

@@ -255,7 +255,23 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
 
 
 def _extract_id(row: dict[str, str]) -> str | None:
-    return row.get("id_code") or row.get("id")
+    for key in [
+        "id",
+        "Id",
+        "id_code",
+        "image_id",
+        "StudyInstanceUID",
+        "image_name",
+        "key",
+        "clip",
+        "request_id",
+        "sentence_id",
+        "rec_id",
+    ]:
+        value = row.get(key)
+        if value not in (None, ""):
+            return value
+    return None
 
 
 def _read_structured_rows(path: Path) -> list[dict[str, Any]]:
@@ -379,9 +395,7 @@ def _collect_visible_validation_ids(
             rel = str(path.relative_to(visible_validation_dir)) if path.is_relative_to(visible_validation_dir) else path.name
             if path.suffix.lower() in {".csv", ".tsv", ".json", ".jsonl", ".txt"}:
                 for row in _read_structured_rows(path):
-                    candidate = row.get("id") or row.get("Id") or _extract_id(row)
-                    if not candidate and "request_id" in row:
-                        candidate = row.get("request_id")
+                    candidate = _extract_id(row)
                     if candidate:
                         ids.add(str(candidate))
                         if len(examples) < 10:

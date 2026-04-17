@@ -22,6 +22,34 @@ from agents.coder.diff_coder import diff_generate_and_apply
 logger = logging.getLogger("MLEvolve")
 
 
+def _format_metric_context(parent_node: SearchNode) -> str:
+    lines = []
+
+    effective_metric = None
+    if getattr(parent_node, "metric", None) is not None:
+        effective_metric = getattr(parent_node.metric, "value", None)
+
+    maximize = None
+    if getattr(parent_node, "metric", None) is not None:
+        maximize = getattr(parent_node.metric, "maximize", None)
+
+    if effective_metric is not None:
+        lines.append(f"- Effective metric used for ranking: {effective_metric}")
+    if getattr(parent_node, "metric_source", None):
+        lines.append(f"- Metric source: {parent_node.metric_source}")
+    if getattr(parent_node, "self_reported_metric", None) is not None:
+        lines.append(f"- Self-reported metric: {parent_node.self_reported_metric}")
+    if getattr(parent_node, "hidden_metric", None) is not None:
+        lines.append(f"- Hidden validation metric: {parent_node.hidden_metric}")
+    if maximize is not None:
+        lines.append(f"- Optimization direction: {'maximize' if maximize else 'minimize'}")
+
+    if not lines:
+        lines.append("- No parsed metric metadata is available for the previous solution.")
+
+    return "\n".join(lines)
+
+
 def run(agent, parent_node: SearchNode) -> SearchNode:
     improvement_standards = (
         "🎯 As a Grandmaster, make MEANINGFUL improvements that boost leaderboard performance.\n\n"
@@ -220,6 +248,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
     prompt["Instructions"] |= ROBUSTNESS_GENERALIZATION_STRATEGY
 
     output = wrap_code(parent_node.term_out, lang="")
+    metric_context = _format_metric_context(parent_node)
 
     if not agent.acfg.use_diff_mode:
         prompt["Instructions"] |= prompt_resp_fmt()
@@ -232,7 +261,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         memory_section = f"\n# Memory\nBelow is a record of previous improvement attempts and their outcomes:\n {prompt['Memory']}\n"
 
     user_prompt = f"\n# Task description\n{prompt['Task description']}{memory_section}\n{instructions}"
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe current solution uses the following code:\n{prompt['Previous solution']['Code']}\nIts output was:\n{output}\nBuilding on this, I'll develop an improved approach."
+    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe current solution uses the following code:\n{prompt['Previous solution']['Code']}\nPrevious metric context:\n{metric_context}\nIts output was:\n{output}\nBuilding on this, I'll develop an improved approach."
 
     parent_node.add_expected_child_count()
 

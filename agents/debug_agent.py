@@ -17,6 +17,34 @@ from agents.triggers import register_node
 logger = logging.getLogger("MLEvolve")
 
 
+def _format_metric_context(parent_node: SearchNode) -> str:
+    lines = []
+
+    effective_metric = None
+    if getattr(parent_node, "metric", None) is not None:
+        effective_metric = getattr(parent_node.metric, "value", None)
+
+    maximize = None
+    if getattr(parent_node, "metric", None) is not None:
+        maximize = getattr(parent_node.metric, "maximize", None)
+
+    if effective_metric is not None:
+        lines.append(f"- Effective metric used for ranking: {effective_metric}")
+    if getattr(parent_node, "metric_source", None):
+        lines.append(f"- Metric source: {parent_node.metric_source}")
+    if getattr(parent_node, "self_reported_metric", None) is not None:
+        lines.append(f"- Self-reported metric: {parent_node.self_reported_metric}")
+    if getattr(parent_node, "hidden_metric", None) is not None:
+        lines.append(f"- Hidden validation metric: {parent_node.hidden_metric}")
+    if maximize is not None:
+        lines.append(f"- Optimization direction: {'maximize' if maximize else 'minimize'}")
+
+    if not lines:
+        lines.append("- No parsed metric metadata is available for the previous solution.")
+
+    return "\n".join(lines)
+
+
 def _format_debug_memory_guidance(agent, similar_fixes: List[Tuple]) -> str:
     if not similar_fixes:
         return ""
@@ -149,7 +177,8 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
     def build_prompt_complete(instructions_with_format, use_full_code_requirement=False):
         current_introduction = introduction_base + (full_code_requirement if use_full_code_requirement else "")
         user_prompt = f"\n# Task description\n{prompt['Task description']}\n{instructions_with_format}"
-        return f"{current_introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe code that needs fixing:\n{prompt['Previous (buggy) implementation']}\nThe error/issue encountered:\n{prompt['Execution output']}\nAnalyzing the root cause: {parent_node.analysis}\nI'll now fix this issue."
+        metric_context = _format_metric_context(parent_node)
+        return f"{current_introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe code that needs fixing:\n{prompt['Previous (buggy) implementation']}\nPrevious metric context:\n{metric_context}\nThe error/issue encountered:\n{prompt['Execution output']}\nAnalyzing the root cause: {parent_node.analysis}\nI'll now fix this issue."
 
     parent_node.add_expected_child_count()
 
