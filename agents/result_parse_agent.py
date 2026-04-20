@@ -305,6 +305,24 @@ def _mark_content_quality_failure(node: SearchNode, content_error):
     node.analysis = f"CONTENT_QUALITY_ERROR: This previous solution runs without bugs and has correct format, but failed content quality check.\n\nDetails:\n{content_error}"
 
 
+def _mark_hidden_validation_failure(node: SearchNode, hidden_failure_reason: str):
+    hidden_error_message = (
+        "Hidden validation grading FAILED.\n\n"
+        f"{hidden_failure_reason}\n\n"
+        "The hidden validation submission did not satisfy the evaluator contract. "
+        "Inspect how `submission_validation.csv` is generated and ensure it matches the "
+        "expected schema, row count, ids, and prediction granularity for the validation split."
+    )
+    node.is_valid = False
+    node.is_buggy = True
+    node._term_out.append(f"\n{hidden_error_message}")
+    node.analysis = (
+        "HIDDEN_VALIDATION_ERROR: Execution succeeded but the hidden validation submission "
+        "failed grading.\n\n"
+        f"Details:\n{hidden_failure_reason}"
+    )
+
+
 def _validate_metric_direction(agent, node: SearchNode, response: dict):
     returned_maximize = not response["lower_is_better"]
     if agent.metric_maximize is not None and returned_maximize != agent.metric_maximize:
@@ -429,19 +447,7 @@ def run(
             node.analysis = response["summary"]
             if hidden_metric_report and not hidden_metric_report.get("valid", False):
                 hidden_failure_reason = hidden_metric_report.get("reason", "hidden scoring failed")
-                hidden_error_message = (
-                    "Hidden validation grading FAILED.\n\n"
-                    f"{hidden_failure_reason}\n\n"
-                    "The hidden validation submission did not satisfy the evaluator contract. "
-                    "Inspect how `submission_validation.csv` is generated and ensure it matches the "
-                    "expected schema, row count, ids, and prediction granularity for the validation split."
-                )
-                node._term_out.append(f"\n{hidden_error_message}")
-                node.analysis = (
-                    "HIDDEN_VALIDATION_ERROR: Execution produced a validation submission that "
-                    "failed hidden grading.\n\n"
-                    f"Details:\n{hidden_failure_reason}"
-                )
+                _mark_hidden_validation_failure(node, hidden_failure_reason)
             _save_code_summary(agent, node, response)
             _determine_buggy(
                 node,
@@ -450,7 +456,6 @@ def run(
                 require_reported_metric=hidden_metric_report is None,
             )
             if hidden_metric_report and not hidden_metric_report.get("valid", False):
-                node.is_buggy = True
                 logger.warning(
                     "Node %s marked as buggy due to hidden validation grading failure: %s",
                     node.id,
