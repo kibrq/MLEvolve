@@ -646,6 +646,45 @@ def _prepare_random_pizza_second_split(visible_output, validation_dir, hidden_an
     }
 
 
+def _prepare_detecting_insults_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = train_test_split(
+        train_df,
+        test_size=0.1,
+        random_state=0,
+        stratify=train_df["Insult"],
+    )
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+
+    validation_visible_df = val_df[["Date", "Comment"]].copy()
+    validation_visible_df.to_csv(validation_dir / "validation.csv", index=False)
+
+    answers_df = val_df[["Insult", "Date", "Comment"]].copy()
+    answers_df.to_csv(hidden_answers_path, index=False)
+
+    sample_df = answers_df.copy()
+    sample_df["Insult"] = 0
+    sample_df = sample_df[["Insult", "Date", "Comment"]]
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
 def _prepare_text_normalization_second_split(competition_id, visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path):
     import pandas as pd
     from sklearn.model_selection import train_test_split
@@ -812,6 +851,8 @@ def _prepare_second_split_hidden_validation_artifacts(
         return _prepare_dogs_vs_cats_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "random-acts-of-pizza":
         return _prepare_random_pizza_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "detecting-insults-in-social-commentary":
+        return _prepare_detecting_insults_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id in {"text-normalization-challenge-english-language", "text-normalization-challenge-russian-language"}:
         return _prepare_text_normalization_second_split(competition_id, visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "the-icml-2013-whale-challenge-right-whale-redux":

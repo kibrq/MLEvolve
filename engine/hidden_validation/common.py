@@ -14,6 +14,7 @@ FALLBACK_LITE_COMPETITION_IDS = {
     "aerial-cactus-identification",
     "aptos2019-blindness-detection",
     "denoising-dirty-documents",
+    "detecting-insults-in-social-commentary",
     "dog-breed-identification",
     "dogs-vs-cats-redux-kernels-edition",
     "histopathologic-cancer-detection",

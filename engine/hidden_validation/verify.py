@@ -267,6 +267,7 @@ def _extract_id(row: dict[str, str]) -> str | None:
         "request_id",
         "sentence_id",
         "rec_id",
+        "Comment",
     ]:
         value = row.get(key)
         if value not in (None, ""):
