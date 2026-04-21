@@ -17,7 +17,7 @@ def get_impl_guideline_from_agent(agent):
         k_fold_validation=getattr(agent.acfg, "k_fold_validation", 0),
         pretrain_model_dir=getattr(agent.cfg, "pretrain_model_dir", ""),
         hidden_validation_active=bool(
-            getattr(getattr(agent.cfg, "hidden_validation", None), "enabled", False)
+            getattr(agent, "hidden_validation_state", {}).get("active", False)
         ),
     )
 
@@ -57,7 +57,7 @@ def get_impl_guideline(
         "",
         "**3. Print Validation Metric**",
         "• MUST print: `print(f'Final Validation Score: {score}')`",
-        "• Score MUST be computed on hold-out validation set using proper metric formula",
+        "• Score MUST be computed using the task's designated evaluation split and proper metric formula",
         "• CRITICAL CONSISTENCY REQUIREMENT: Ensure that validation and test inference use IDENTICAL processing logic. Any differences in how validation and test data are handled (such as post-processing, reconstruction, or formatting) can cause large performance gaps between validation and test sets. Maintain consistency across all data processing steps for both validation and test phases.",
         "",
         "📁 **Directories**: Input data in `./input/`, submission in `./submission/`, temp files in `./working/`",
@@ -81,9 +81,12 @@ def get_impl_guideline(
     ]
     if hidden_validation_active:
         impl_guideline[15:15] = [
-            "• Also write: `./submission/submission_validation.csv`",
-            "• Content: Model predictions on ALL provided validation samples under `./input/validation`",
-            "• Format: Must use the same schema style as `submission.csv`",
+            "• Also write: `./submission/submission_visible.csv` and `./submission/submission_hidden.csv`",
+            "• Content: Model predictions on ALL provided samples under `./input/visible_validation` and `./input/hidden_validation`",
+            "• Format: Both must use the same schema style as `submission.csv`",
+            "• `./input/visible_validation` is the mandatory external evaluation target for the printed score",
+            "• You MAY create an internal train-only split for early stopping or model selection, but ONLY from the remaining training data",
+            "• Do NOT create a replacement evaluation split when `./input/visible_validation` already exists, and never train on `./input/visible_validation` or `./input/hidden_validation`",
             "",
         ]
     if expose_prediction:
@@ -101,8 +104,8 @@ def get_impl_guideline(
     if hidden_validation_active:
         impl_guideline.extend(
             [
-                "□ Did I also generate submission_validation.csv in the correct path with ALL validation predictions?",
-                "□ Did validation inference reuse the same preprocessing and prediction logic as test inference?",
+                "□ Did I also generate submission_visible.csv and submission_hidden.csv in the correct path with ALL validation predictions?",
+                "□ Did visible and hidden validation inference reuse the same preprocessing and prediction logic as test inference?",
             ]
         )
 

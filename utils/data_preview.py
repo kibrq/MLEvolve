@@ -181,18 +181,24 @@ def generate(base_path, include_file_details=True, simple=False):
 
         if has_validation:
             msg = []
-            if (input_dir / "validation").exists():
+            if (input_dir / "visible_validation").exists() or (input_dir / "hidden_validation").exists():
                 msg.append("\n**HIDDEN VALIDATION DATA CONTRACT - READ CAREFULLY**")
                 msg.append(
                     "\n"
-                    "This workspace contains a dedicated `validation/` subtree for search-time evaluation.\n"
-                    "It mirrors the public test-style interface inside a separate `validation/` namespace and must NOT be merged into training.\n"
+                    "This workspace contains two additional evaluation splits derived from the training data.\n"
+                    "- `./input/visible_validation` has a matching label file at `./input/visible_validation_answers.csv`\n"
+                    "- `./input/hidden_validation` is unlabeled and must be treated like an extra test-style split\n"
+                    "Neither split may be merged back into training.\n"
                     "\n"
                     "REQUIRED STEPS:\n"
                     "1. Train only on the reduced training data that remains in the normal training folders\n"
-                    "2. Run inference on the regular test-style split and save `./submission/submission.csv`\n"
-                    "3. Run inference on `./input/validation` and save `./submission/submission_validation.csv`\n"
-                    "4. Use the same submission schema for both files\n"
+                    "2. You MAY create an internal train-only split for early stopping or model selection, but only from that remaining training data\n"
+                    "3. Do NOT create a replacement external validation split when `./input/visible_validation` already exists\n"
+                    "4. Run inference on the regular test-style split and save `./submission/submission.csv`\n"
+                    "5. Run inference on `./input/visible_validation` and save `./submission/submission_visible.csv`\n"
+                    "6. Run inference on `./input/hidden_validation` and save `./submission/submission_hidden.csv`\n"
+                    "7. Compute and print the visible validation score using `./input/visible_validation_answers.csv`\n"
+                    "8. Use the same submission schema for all three files\n"
                 )
             else:
                 msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
@@ -277,6 +283,14 @@ def clean_task_desc(task_desc: str, cfg) -> str:
         os.path.join(input_dir, "sampleSubmission.csv")
     ]
 
+    hidden_validation_active = False
+    try:
+        from engine.hidden_validation import get_runtime_state
+
+        hidden_validation_active = bool(get_runtime_state(cfg).get("active", False))
+    except Exception:
+        hidden_validation_active = False
+
     for sample_path in sample_submission_paths:
         if os.path.exists(sample_path):
             try:
@@ -290,10 +304,11 @@ def clean_task_desc(task_desc: str, cfg) -> str:
                 submission_format += "=" * 60
 
                 submission_format += "\n**Submission File Location**: Must save the submission to `./submission/submission.csv`\n."
-                if getattr(cfg, "hidden_validation", None) and getattr(cfg.hidden_validation, "enabled", False):
+                if hidden_validation_active:
                     submission_format += (
-                        "\n**Hidden Validation Mode**: Also save `./submission/submission_validation.csv` "
-                        "for the provided validation-style split.\n"
+                        "\n**Hidden Validation Mode**: Also save `./submission/submission_visible.csv` "
+                        "for `./input/visible_validation` and `./submission/submission_hidden.csv` "
+                        "for `./input/hidden_validation`.\n"
                     )
 
                 cleaned_desc += submission_format

@@ -34,8 +34,6 @@ def _format_metric_context(parent_node: SearchNode) -> str:
         lines.append(f"- Metric source: {parent_node.metric_source}")
     if getattr(parent_node, "self_reported_metric", None) is not None:
         lines.append(f"- Self-reported metric: {parent_node.self_reported_metric}")
-    if getattr(parent_node, "hidden_metric", None) is not None:
-        lines.append(f"- Hidden validation metric: {parent_node.hidden_metric}")
     if maximize is not None:
         lines.append(f"- Optimization direction: {'maximize' if maximize else 'minimize'}")
 
@@ -103,7 +101,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         "   • Complete model definition and training\n"
         "   • Complete validation metric calculation\n"
         "   • Complete test inference and `submission.csv` generation\n"
-        "   • If hidden validation mode is active in the task description, complete `submission_validation.csv` generation as well\n"
+        "   • If hidden validation mode is active in the task description, also generate `submission_visible.csv` and `submission_hidden.csv`\n"
         "   • Every line of code needed to run from beginning to end\n\n"
         "Your response format:\n"
         "1. A brief implementation outline (2-3 sentences) explaining the bugfix\n"
