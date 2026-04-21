@@ -67,7 +67,14 @@ def _copy_assets_by_id(src_dir: Path, dst_dir: Path, ids: list[str], suffixes: l
 def _copy_default_validation_layout(visible_output: Path, validation_dir: Path) -> list[str]:
     copied_rel_paths: list[str] = []
     for src in sorted(visible_output.iterdir()):
-        if src.name in {"validation", "sampleValidationSubmission.csv"}:
+        if src.name in {
+            "validation",
+            "visible_validation",
+            "hidden_validation",
+            "sampleValidationSubmission.csv",
+            "sampleVisibleValidationSubmission.csv",
+            "visible_validation_answers.csv",
+        }:
             continue
         lower_name = src.name.lower()
         if any(token in lower_name for token in ["sample_submission", "samplesubmission", "description"]):
@@ -227,7 +234,14 @@ def _copy_mlsp_validation_layout(visible_output: Path, validation_dir: Path) -> 
 def _collect_authoritative_train_sources(visible_output: Path) -> list[str]:
     sources: list[str] = []
     for src in sorted(visible_output.iterdir()):
-        if src.name in {"validation", "sampleValidationSubmission.csv"}:
+        if src.name in {
+            "validation",
+            "visible_validation",
+            "hidden_validation",
+            "sampleValidationSubmission.csv",
+            "sampleVisibleValidationSubmission.csv",
+            "visible_validation_answers.csv",
+        }:
             continue
         lower_name = src.name.lower()
         if any(token in lower_name for token in ["sample_submission", "samplesubmission", "description"]):
@@ -236,6 +250,22 @@ def _collect_authoritative_train_sources(visible_output: Path) -> list[str]:
             continue
         sources.append(str(src))
     return sources
+
+
+def _rewrite_validation_sources(
+    sources: list[str],
+    validation_dir: Path,
+) -> list[str]:
+    rewritten: list[str] = []
+    prefix = validation_dir.name
+    for source in sources:
+        if source == "validation":
+            rewritten.append(prefix)
+        elif source.startswith("validation/"):
+            rewritten.append(f"{prefix}/{source.split('/', 1)[1]}")
+        else:
+            rewritten.append(source)
+    return rewritten
 
 
 def _estimate_visible_count(visible_output: Path, authoritative_train_sources: list[str]) -> int:
@@ -886,12 +916,14 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
 
     attempt_dir = Path(cfg.workspace_dir).parent / ".hidden_validation" / "mlebench_lite_adapter"
     visible_output = attempt_dir / "input"
-    validation_dir = visible_output / "validation"
     manifest_path = attempt_dir / "split_manifest.json"
     evidence_dir = attempt_dir / "evidence"
-    hidden_answers_path = attempt_dir / "validation_answers.csv"
-    hidden_sample_submission_path = attempt_dir / "sampleValidationSubmission.csv"
-    visible_sample_submission_path = visible_output / "sampleValidationSubmission.csv"
+    visible_validation_dir = visible_output / "visible_validation"
+    hidden_validation_dir = visible_output / "hidden_validation"
+    visible_answers_path = visible_output / "visible_validation_answers.csv"
+    visible_sample_submission_path = visible_output / "sampleVisibleValidationSubmission.csv"
+    hidden_answers_path = attempt_dir / "hidden_validation_answers.csv"
+    hidden_sample_submission_path = attempt_dir / "sampleHiddenValidationSubmission.csv"
 
     if attempt_dir.exists():
         shutil.rmtree(attempt_dir)
@@ -901,26 +933,44 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
         shutil.copytree(Path(cfg.data_dir), visible_output)
         preproc_data(visible_output)
 
-        validation_dir.mkdir(parents=True, exist_ok=True)
-        prep_result = _prepare_second_split_hidden_validation_artifacts(
+        hidden_validation_dir.mkdir(parents=True, exist_ok=True)
+        hidden_prep_result = _prepare_second_split_hidden_validation_artifacts(
             competition_id,
             visible_output,
-            validation_dir,
+            hidden_validation_dir,
             hidden_answers_path,
             hidden_sample_submission_path,
+            hidden_sample_submission_path,
+        )
+        visible_validation_dir.mkdir(parents=True, exist_ok=True)
+        visible_prep_result = _prepare_second_split_hidden_validation_artifacts(
+            competition_id,
+            visible_output,
+            visible_validation_dir,
+            visible_answers_path,
+            visible_sample_submission_path,
             visible_sample_submission_path,
         )
-        authoritative_train_sources = prep_result["authoritative_train_sources"]
-        authoritative_validation_sources = prep_result["authoritative_validation_sources"]
-        hidden_answer_granularity = prep_result["hidden_answer_granularity"]
-        authoritative_label_sources = [str(hidden_answers_path)]
+        authoritative_train_sources = visible_prep_result["authoritative_train_sources"]
+        authoritative_visible_validation_sources = _rewrite_validation_sources(
+            visible_prep_result["authoritative_validation_sources"],
+            visible_validation_dir,
+        )
+        authoritative_hidden_validation_sources = _rewrite_validation_sources(
+            hidden_prep_result["authoritative_validation_sources"],
+            hidden_validation_dir,
+        )
+        visible_answer_granularity = visible_prep_result["hidden_answer_granularity"]
+        hidden_answer_granularity = hidden_prep_result["hidden_answer_granularity"]
+        authoritative_label_sources = [str(visible_answers_path)]
         authoritative_hidden_answer_sources = [str(hidden_answers_path)]
         strategy_summary = (
             "Deterministic mle-bench lite hidden-validation adapter. "
-            "Visible input is copied from cfg.data_dir, then a second split is performed over the "
-            "visible training data only. Held-out training examples are exposed under validation/, "
-            "their labels are hidden in validation_answers.csv, and runtime scoring uses only those "
-            "copied hidden artifacts plus the original competition grader."
+            "Visible input is copied from cfg.data_dir, then two deterministic splits are performed "
+            "over the prepared training data only. The first holdout is exposed under hidden_validation/ "
+            "with labels kept outside the agent workspace, and the second holdout is exposed under "
+            "visible_validation/ with labels available in visible_validation_answers.csv. Runtime search "
+            "uses only the scored visible split, while hidden validation is stored separately for final selection."
         )
 
         _write_adapter_evidence(
@@ -929,29 +979,36 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
             hidden_output=attempt_dir,
             evidence_dir=evidence_dir,
             authoritative_train_sources=authoritative_train_sources,
-            authoritative_validation_sources=authoritative_validation_sources,
+            authoritative_validation_sources=authoritative_visible_validation_sources + authoritative_hidden_validation_sources,
             authoritative_hidden_answer_sources=authoritative_hidden_answer_sources,
             strategy_summary=strategy_summary,
         )
 
         hidden_count = len(read_csv_rows(hidden_answers_path))
+        visible_validation_count = len(read_csv_rows(visible_answers_path))
         visible_count = _estimate_visible_count(visible_output, authoritative_train_sources)
         manifest = {
             "visible_input_dir": str(visible_output),
-            "visible_validation_dir": str(validation_dir),
+            "visible_validation_dir": str(visible_validation_dir),
+            "visible_answers_path": str(visible_answers_path),
+            "visible_sample_submission_path": str(visible_sample_submission_path),
+            "hidden_validation_dir": str(hidden_validation_dir),
             "hidden_answers_path": str(hidden_answers_path),
             "hidden_sample_submission_path": str(hidden_sample_submission_path),
             "competition_id": competition_id,
             "split_seed": "mlebench_prepare",
             "strategy_summary": strategy_summary,
             "visible_count": visible_count,
+            "visible_validation_count": visible_validation_count,
             "hidden_count": hidden_count,
-            "contract_version": "mlebench_lite_adapter_v1",
+            "contract_version": "mlebench_lite_adapter_v2",
             "evidence_dir": str(evidence_dir),
             "authoritative_train_sources": authoritative_train_sources,
             "authoritative_label_sources": authoritative_label_sources,
-            "authoritative_validation_sources": authoritative_validation_sources,
+            "authoritative_visible_validation_sources": authoritative_visible_validation_sources,
+            "authoritative_hidden_validation_sources": authoritative_hidden_validation_sources,
             "authoritative_hidden_answer_sources": authoritative_hidden_answer_sources,
+            "visible_answer_granularity": visible_answer_granularity,
             "hidden_answer_granularity": hidden_answer_granularity,
         }
         manifest_path.write_text(json.dumps(manifest, indent=2))
@@ -967,6 +1024,9 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
                 "fallback_reason": "",
                 "visible_input_dir": manifest["visible_input_dir"],
                 "visible_validation_dir": manifest["visible_validation_dir"],
+                "visible_answers_path": manifest["visible_answers_path"],
+                "visible_sample_submission_path": manifest["visible_sample_submission_path"],
+                "hidden_validation_dir": manifest["hidden_validation_dir"],
                 "hidden_answers_path": manifest["hidden_answers_path"],
                 "hidden_sample_submission_path": manifest["hidden_sample_submission_path"],
                 "manifest_path": str(manifest_path),

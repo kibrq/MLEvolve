@@ -32,19 +32,25 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
     required_keys = [
         "visible_input_dir",
         "visible_validation_dir",
+        "visible_answers_path",
+        "visible_sample_submission_path",
+        "hidden_validation_dir",
         "hidden_answers_path",
         "hidden_sample_submission_path",
         "competition_id",
         "split_seed",
         "strategy_summary",
         "visible_count",
+        "visible_validation_count",
         "hidden_count",
         "contract_version",
         "evidence_dir",
         "authoritative_train_sources",
         "authoritative_label_sources",
-        "authoritative_validation_sources",
+        "authoritative_visible_validation_sources",
+        "authoritative_hidden_validation_sources",
         "authoritative_hidden_answer_sources",
+        "visible_answer_granularity",
         "hidden_answer_granularity",
     ]
     missing = [key for key in required_keys if key not in manifest]
@@ -59,6 +65,9 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
 
     visible_dir = Path(manifest["visible_input_dir"])
     visible_validation_dir = Path(manifest["visible_validation_dir"])
+    visible_answers_path = Path(manifest["visible_answers_path"])
+    visible_sample_submission_path = Path(manifest["visible_sample_submission_path"])
+    hidden_validation_dir = Path(manifest["hidden_validation_dir"])
     answers_path = Path(manifest["hidden_answers_path"])
     sample_submission_path = Path(manifest["hidden_sample_submission_path"])
     evidence_dir = Path(manifest["evidence_dir"])
@@ -74,6 +83,30 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
         return {
             "ok": False,
             "reason": "visible validation dir missing",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if not visible_answers_path.exists():
+        return {
+            "ok": False,
+            "reason": "visible answers path missing",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if not visible_sample_submission_path.exists():
+        return {
+            "ok": False,
+            "reason": "visible sample submission path missing",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if not hidden_validation_dir.exists():
+        return {
+            "ok": False,
+            "reason": "hidden validation dir missing",
             "report": "",
             "manifest": manifest,
             "evidence_summary": "",
@@ -149,31 +182,71 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
             "evidence_summary": "",
         }
 
-    grade_check = _validate_hidden_sample_submission(cfg=cfg, manifest=manifest)
-    if not grade_check["ok"]:
+    visible_grade_check = _validate_sample_submission(
+        cfg=cfg,
+        answers_path=visible_answers_path,
+        sample_submission_path=visible_sample_submission_path,
+    )
+    if not visible_grade_check["ok"]:
         return {
             "ok": False,
-            "reason": f"{grade_check['reason']}: {grade_check['detail']}",
+            "reason": f"{visible_grade_check['reason']}: {visible_grade_check['detail']}",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    hidden_grade_check = _validate_sample_submission(
+        cfg=cfg,
+        answers_path=answers_path,
+        sample_submission_path=sample_submission_path,
+    )
+    if not hidden_grade_check["ok"]:
+        return {
+            "ok": False,
+            "reason": f"{hidden_grade_check['reason']}: {hidden_grade_check['detail']}",
             "report": "",
             "manifest": manifest,
             "evidence_summary": "",
         }
 
-    alignment = _compute_split_alignment(
+    visible_alignment = _compute_split_alignment(
         visible_dir=visible_dir,
         visible_validation_dir=visible_validation_dir,
+        answers_path=visible_answers_path,
+        sample_submission_path=visible_sample_submission_path,
+        manifest=manifest,
+        validation_sources_key="authoritative_visible_validation_sources",
+        answer_granularity_key="visible_answer_granularity",
+    )
+    hidden_alignment = _compute_split_alignment(
+        visible_dir=visible_dir,
+        visible_validation_dir=hidden_validation_dir,
         answers_path=answers_path,
         sample_submission_path=sample_submission_path,
         manifest=manifest,
+        validation_sources_key="authoritative_hidden_validation_sources",
+        answer_granularity_key="hidden_answer_granularity",
     )
-    expected_visible_count = alignment["visible_training_count"]
-    expected_hidden_count = alignment["hidden_answers_count"]
+    expected_visible_count = visible_alignment["visible_training_count"]
+    expected_visible_validation_count = visible_alignment["hidden_answers_count"]
+    expected_hidden_count = hidden_alignment["hidden_answers_count"]
     if int(manifest["visible_count"]) != expected_visible_count:
         return {
             "ok": False,
             "reason": (
                 "manifest visible_count does not match visible training count: "
                 f"{manifest['visible_count']} != {expected_visible_count}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if int(manifest["visible_validation_count"]) != expected_visible_validation_count:
+        return {
+            "ok": False,
+            "reason": (
+                "manifest visible_validation_count does not match visible answers rows: "
+                f"{manifest['visible_validation_count']} != {expected_visible_validation_count}"
             ),
             "report": "",
             "manifest": manifest,
@@ -191,25 +264,50 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
             "evidence_summary": "",
         }
     if (
-        alignment["hidden_answer_granularity"] == "direct"
-        and alignment["visible_validation_count"] != expected_hidden_count
+        visible_alignment["hidden_answer_granularity"] == "direct"
+        and visible_alignment["visible_validation_count"] != expected_visible_validation_count
     ):
         return {
             "ok": False,
             "reason": (
-                "visible validation file count does not match hidden answers rows: "
-                f"{alignment['visible_validation_count']} != {expected_hidden_count}"
+                "visible validation file count does not match visible answers rows: "
+                f"{visible_alignment['visible_validation_count']} != {expected_visible_validation_count}"
             ),
             "report": "",
             "manifest": manifest,
             "evidence_summary": "",
         }
-    if alignment["overlap_train_answers_count"] > 0:
+    if (
+        hidden_alignment["hidden_answer_granularity"] == "direct"
+        and hidden_alignment["visible_validation_count"] != expected_hidden_count
+    ):
+        return {
+            "ok": False,
+            "reason": (
+                "hidden validation file count does not match hidden answers rows: "
+                f"{hidden_alignment['visible_validation_count']} != {expected_hidden_count}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if visible_alignment["overlap_train_answers_count"] > 0:
+        return {
+            "ok": False,
+            "reason": (
+                "some visible-answer ids still exist in visible training data: "
+                f"{visible_alignment['overlap_train_answers_examples']}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if hidden_alignment["overlap_train_answers_count"] > 0:
         return {
             "ok": False,
             "reason": (
                 "some hidden-answer ids still exist in visible training data: "
-                f"{alignment['overlap_train_answers_examples']}"
+                f"{hidden_alignment['overlap_train_answers_examples']}"
             ),
             "report": "",
             "manifest": manifest,
@@ -220,30 +318,44 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
     report = (
         f"visible_input_dir={visible_dir}\n"
         f"visible_validation_dir={visible_validation_dir}\n"
+        f"visible_answers_path={visible_answers_path}\n"
+        f"visible_sample_submission_path={visible_sample_submission_path}\n"
+        f"hidden_validation_dir={hidden_validation_dir}\n"
         f"hidden_answers_path={answers_path}\n"
         f"hidden_sample_submission_path={sample_submission_path}\n"
         f"contract_version={manifest['contract_version']}\n"
         f"visible_count={manifest['visible_count']}\n"
+        f"visible_validation_count={manifest['visible_validation_count']}\n"
         f"hidden_count={manifest['hidden_count']}\n"
         f"split_seed={manifest['split_seed']}\n"
         f"top_level_layout_check={source_layout_check['detail']}\n"
         f"authoritative_train_sources={manifest['authoritative_train_sources']}\n"
         f"authoritative_label_sources={manifest['authoritative_label_sources']}\n"
-        f"authoritative_validation_sources={manifest['authoritative_validation_sources']}\n"
+        f"authoritative_visible_validation_sources={manifest['authoritative_visible_validation_sources']}\n"
+        f"authoritative_hidden_validation_sources={manifest['authoritative_hidden_validation_sources']}\n"
         f"authoritative_hidden_answer_sources={manifest['authoritative_hidden_answer_sources']}\n"
         f"evidence_dir={evidence_dir}\n"
         f"evidence_bundle_check={evidence_check['detail']}\n"
         f"strategy_summary={manifest['strategy_summary']}\n"
-        f"sample_submission_validation_grade_check={grade_check['detail']}\n"
-        f"visible_training_count={alignment['visible_training_count']}\n"
-        f"hidden_answers_count={alignment['hidden_answers_count']}\n"
-        f"sample_validation_rows={alignment['sample_validation_rows']}\n"
-        f"visible_validation_count={alignment['visible_validation_count']}\n"
-        f"hidden_answer_granularity={alignment['hidden_answer_granularity']}\n"
-        f"overlap_train_answers_count={alignment['overlap_train_answers_count']}\n"
-        f"sample_ids_match_answers={alignment['sample_ids_match_answers']}\n"
-        f"overlap_train_answers_examples={alignment['overlap_train_answers_examples']}\n"
-        f"visible_validation_examples={alignment['visible_validation_examples']}"
+        f"visible_sample_submission_grade_check={visible_grade_check['detail']}\n"
+        f"hidden_sample_submission_grade_check={hidden_grade_check['detail']}\n"
+        f"visible_training_count={visible_alignment['visible_training_count']}\n"
+        f"visible_answers_count={visible_alignment['hidden_answers_count']}\n"
+        f"visible_sample_rows={visible_alignment['sample_validation_rows']}\n"
+        f"visible_validation_file_count={visible_alignment['visible_validation_count']}\n"
+        f"visible_answer_granularity={visible_alignment['hidden_answer_granularity']}\n"
+        f"visible_sample_ids_match_answers={visible_alignment['sample_ids_match_answers']}\n"
+        f"visible_overlap_train_answers_count={visible_alignment['overlap_train_answers_count']}\n"
+        f"visible_overlap_train_answers_examples={visible_alignment['overlap_train_answers_examples']}\n"
+        f"visible_validation_examples={visible_alignment['visible_validation_examples']}\n"
+        f"hidden_answers_count={hidden_alignment['hidden_answers_count']}\n"
+        f"hidden_sample_rows={hidden_alignment['sample_validation_rows']}\n"
+        f"hidden_validation_file_count={hidden_alignment['visible_validation_count']}\n"
+        f"hidden_answer_granularity={hidden_alignment['hidden_answer_granularity']}\n"
+        f"hidden_sample_ids_match_answers={hidden_alignment['sample_ids_match_answers']}\n"
+        f"hidden_overlap_train_answers_count={hidden_alignment['overlap_train_answers_count']}\n"
+        f"hidden_overlap_train_answers_examples={hidden_alignment['overlap_train_answers_examples']}\n"
+        f"hidden_validation_examples={hidden_alignment['visible_validation_examples']}"
     )
     return {
         "ok": True,
@@ -312,6 +424,8 @@ def _compute_split_alignment(
     answers_path: Path,
     sample_submission_path: Path,
     manifest: dict[str, Any],
+    validation_sources_key: str,
+    answer_granularity_key: str,
 ) -> dict[str, Any]:
     answer_rows = read_csv_rows(answers_path)
     sample_rows = read_csv_rows(sample_submission_path)
@@ -323,6 +437,7 @@ def _compute_split_alignment(
         visible_dir,
         visible_validation_dir,
         manifest,
+        validation_sources_key,
     )
     visible_training_count = _compute_visible_training_count(
         visible_dir,
@@ -331,7 +446,7 @@ def _compute_split_alignment(
     )
     hidden_answers_count = len(answer_rows)
     sample_validation_rows = len(sample_rows)
-    hidden_answer_granularity = manifest.get("hidden_answer_granularity", "direct")
+    hidden_answer_granularity = manifest.get(answer_granularity_key, "direct")
     overlap_train_answers_examples: list[str] = []
     overlap_train_answers_count = 0
     for candidate in answer_id_set:
@@ -360,11 +475,12 @@ def _collect_visible_validation_ids(
     visible_dir: Path,
     visible_validation_dir: Path,
     manifest: dict[str, Any],
+    validation_sources_key: str,
 ) -> tuple[set[str], list[str]]:
     ids: set[str] = set()
     examples: list[str] = []
 
-    authoritative_sources = manifest.get("authoritative_validation_sources", [])
+    authoritative_sources = manifest.get(validation_sources_key, [])
     candidate_paths: list[Path] = []
     if isinstance(authoritative_sources, list) and authoritative_sources:
         for source in authoritative_sources:
@@ -438,19 +554,23 @@ def _compute_visible_training_count(
     return max(counts) if counts else 0
 
 
-def _validate_hidden_sample_submission(cfg, manifest: dict[str, Any]) -> dict[str, Any]:
+def _validate_sample_submission(
+    cfg,
+    answers_path: Path,
+    sample_submission_path: Path,
+) -> dict[str, Any]:
     try:
         from mlebench.registry import registry
         from mlebench.utils import load_answers, read_csv
 
         competition = registry.get_competition(infer_competition_id(cfg))
-        answers = load_answers(Path(manifest["hidden_answers_path"]))
-        submission = read_csv(Path(manifest["hidden_sample_submission_path"]))
+        answers = load_answers(answers_path)
+        submission = read_csv(sample_submission_path)
         score = competition.grader(submission, answers)
         return {"ok": score is not None, "reason": "grader returned None" if score is None else "", "detail": f"score={score}"}
     except Exception as exc:
-        logger.exception("Hidden sample submission validation failed")
-        return {"ok": False, "reason": "hidden sample submission grading failed", "detail": str(exc)}
+        logger.exception("Sample submission validation failed")
+        return {"ok": False, "reason": "sample submission grading failed", "detail": str(exc)}
 
 
 def _validate_evidence_bundle(evidence_dir: Path) -> dict[str, Any]:
@@ -513,10 +633,14 @@ def _validate_visible_top_level_layout(cfg, visible_dir: Path) -> dict[str, Any]
         }
 
     required_extra_entries = []
-    if "validation" not in visible_entries:
-        required_extra_entries.append("validation")
-    if "sampleValidationSubmission.csv" not in visible_entries:
-        required_extra_entries.append("sampleValidationSubmission.csv")
+    for required in [
+        "visible_validation",
+        "hidden_validation",
+        "visible_validation_answers.csv",
+        "sampleVisibleValidationSubmission.csv",
+    ]:
+        if required not in visible_entries:
+            required_extra_entries.append(required)
     if required_extra_entries:
         return {
             "ok": False,
