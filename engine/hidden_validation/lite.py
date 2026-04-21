@@ -789,7 +789,15 @@ def _prepare_osic_second_split(
     answers_df = all_weeks.merge(val_df, on=["Patient", "Weeks"], how="left")
     answers_df["Patient_Week"] = answers_df["Patient"] + "_" + answers_df["Weeks"].astype(str)
     answers_df["Confidence"] = 100
+    # OSIC can contain multiple clinical rows for the same Patient_Week.
+    # The submission contract is keyed by unique Patient_Week, so normalize
+    # to one row per key before writing validation targets and answers.
+    answers_df = answers_df.sort_values(["Patient", "Weeks"]).drop_duplicates(
+        subset=["Patient_Week"],
+        keep="first",
+    )
     answers_df.to_csv(hidden_answers_path, index=False)
+    answers_df[["Patient_Week"]].to_csv(validation_dir / "validation_targets.csv", index=False)
 
     sample_df = answers_df[["Patient_Week"]].copy()
     sample_df["FVC"] = 2000
@@ -815,7 +823,7 @@ def _prepare_osic_second_split(
 
     return {
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
-        "authoritative_validation_sources": ["validation/validation.csv"],
+        "authoritative_validation_sources": ["validation/validation_targets.csv"],
         "hidden_answer_granularity": "direct",
     }
 
