@@ -132,6 +132,8 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
             "- You should write a brief natural language description (2-3 sentences) of how the issue in the previous implementation can be fixed.\n",
             "- Don't suggest to do EDA.\n",
             "- Most libraries are stable and available. The bug is not caused by the library version mismatch. **Don't suggest to reinstall the core libraries.** (like pip install torch, pip upgrade transformers, !pip install tensorflow, subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'transformers', 'accelerate', 'pandas', 'torch', 'torchvision']))\n",
+            "- If the previous attempt failed validation or submission grading, assume the validator is correct and explicitly re-check the generated submission files against the sample submission / evaluator contract before changing anything else.\n",
+            "- Re-check submission schema, row count, ids, ordering, and prediction granularity. Do not claim the validator is wrong.\n",
         ],
     }
     prompt["Instructions"] |= get_impl_guideline_from_agent(agent)

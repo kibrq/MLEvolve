@@ -310,8 +310,10 @@ def _mark_visible_validation_failure(node: SearchNode, validation_failure_reason
         "Visible validation grading FAILED.\n\n"
         f"{validation_failure_reason}\n\n"
         "The visible validation submission did not satisfy the evaluator contract. "
-        "Inspect how `submission_visible.csv` is generated and ensure it matches the "
-        "expected schema, row count, ids, and prediction granularity for the visible validation split."
+        "Assume the validator is correct. Do NOT argue with it or work around it. "
+        "Inspect how `submission_visible.csv` is generated and re-check it against the "
+        "sample submission / evaluator contract for the expected schema, row count, ids, ordering, "
+        "and prediction granularity for the visible validation split."
     )
     node.is_valid = False
     node.is_buggy = True
