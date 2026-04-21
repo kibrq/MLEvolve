@@ -1,5 +1,6 @@
 """Hidden search validation helpers."""
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -93,9 +94,15 @@ def _score_submission(
                 "valid": False,
                 "reason": "grader returned None",
             }
+        score = float(score)
+        if not math.isfinite(score):
+            return {
+                "valid": False,
+                "reason": f"grader returned non-finite score: {score}",
+            }
         return {
             "valid": True,
-            "score": float(score),
+            "score": score,
             "lower_is_better": lower_is_better,
             "submission_path": str(submission_path),
         }

@@ -2,6 +2,7 @@
 
 import csv
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -370,6 +371,7 @@ def _extract_id(row: dict[str, str]) -> str | None:
     for key in [
         "id",
         "Id",
+        "Patient_Week",
         "id_code",
         "image_id",
         "StudyInstanceUID",
@@ -567,7 +569,16 @@ def _validate_sample_submission(
         answers = load_answers(answers_path)
         submission = read_csv(sample_submission_path)
         score = competition.grader(submission, answers)
-        return {"ok": score is not None, "reason": "grader returned None" if score is None else "", "detail": f"score={score}"}
+        if score is None:
+            return {"ok": False, "reason": "grader returned None", "detail": "score=None"}
+        score = float(score)
+        if not math.isfinite(score):
+            return {
+                "ok": False,
+                "reason": f"grader returned non-finite score: {score}",
+                "detail": f"score={score}",
+            }
+        return {"ok": True, "reason": "", "detail": f"score={score}"}
     except Exception as exc:
         logger.exception("Sample submission validation failed")
         return {"ok": False, "reason": "sample submission grading failed", "detail": str(exc)}
