@@ -135,14 +135,14 @@ class AgentSearch:
             hidden_validation_note = """
 
         ⚠️  HIDDEN VALIDATION MODE:
-        - `./input` preserves the original public layout and also contains `./input/validation`
-        - Treat `./input/validation` like an additional unlabeled test-style split for evaluation only
-        - The `validation/` subtree mirrors the public inference interface inside a separate namespace; do not invent a different input contract for validation
-        - Do NOT merge validation data into training
-        - Write BOTH files:
+        - `./input` preserves the original public layout and also contains `./input/visible_validation`, `./input/hidden_validation`, and `./input/visible_validation_answers.csv`
+        - Use `./input/visible_validation_answers.csv` only to compute and print the visible validation score during development
+        - Treat `./input/visible_validation` and `./input/hidden_validation` as separate inference targets; do not merge either split into training
+        - Write ALL THREE files:
           1. `./submission/submission.csv` for the normal test-style output
-          2. `./submission/submission_validation.csv` for the validation split output
-        - `submission_validation.csv` must use the same schema style as `submission.csv`
+          2. `./submission/submission_visible.csv` for the visible validation split output
+          3. `./submission/submission_hidden.csv` for the hidden validation split output
+        - `submission_visible.csv` and `submission_hidden.csv` must use the same schema style as `submission.csv`
         """
         self.data_preview = base_preview + submission_format_warning + hidden_validation_note
 
@@ -215,14 +215,14 @@ class AgentSearch:
                         logger.info(f"Node {result_node.id} code generated and reviewed, execution deferred")
                         result_node.pending_execution = True
                         return _root, result_node
-                    exe_res, hidden_metric_report = self._execute_with_hidden_validation(
+                    exe_res, validation_metric_report = self._execute_with_hidden_validation(
                         result_node,
                         exec_callback,
                     )
                     result_node = result_parse_agent.run(self,
                         node=result_node,
                         exec_result=exe_res,
-                        hidden_metric_report=hidden_metric_report,
+                        validation_metric_report=validation_metric_report,
                     )
                     execution.validate_executed_node(self, result_node)
                     logger.info(f"The metric value of node {result_node.id} is {result_node.metric.value}.")
@@ -293,14 +293,14 @@ class AgentSearch:
         parent_node = node.parent
 
         try:
-            exe_res, hidden_metric_report = self._execute_with_hidden_validation(
+            exe_res, validation_metric_report = self._execute_with_hidden_validation(
                 node,
                 exec_callback,
             )
             node = result_parse_agent.run(self,
                 node=node,
                 exec_result=exe_res,
-                hidden_metric_report=hidden_metric_report,
+                validation_metric_report=validation_metric_report,
             )
 
             execution.validate_executed_node(self, node)
@@ -339,17 +339,22 @@ class AgentSearch:
         exec_callback: ExecCallbackType,
     ):
         visible_exec = exec_callback(node.code, node.id, True)
-        hidden_metric_report = None
+        validation_metric_report = None
 
         if not self.hidden_validation_state.get("active"):
-            return visible_exec, hidden_metric_report
+            return visible_exec, validation_metric_report
         if visible_exec.exc_type is not None:
-            return visible_exec, hidden_metric_report
-        hidden_metric_report = hidden_validation.score_hidden_execution(
+            return visible_exec, validation_metric_report
+        validation_metric_report = hidden_validation.score_validation_execution(
             self.cfg,
             self.hidden_validation_state,
             node.id,
             visible_exec,
             metric_maximize=self.metric_maximize,
         )
-        return visible_exec, hidden_metric_report
+        hidden_validation.record_hidden_score(
+            self.cfg,
+            node.id,
+            validation_metric_report.get("hidden"),
+        )
+        return visible_exec, validation_metric_report

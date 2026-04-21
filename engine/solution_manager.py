@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import List
 
 from engine.search_node import SearchNode
+from engine.hidden_validation.common import load_hidden_scoreboard
 
 logger = logging.getLogger("MLEvolve")
 
@@ -33,8 +34,6 @@ def write_metric_file(filepath, node, metric_maximize: bool) -> None:
         f.write(f"Metric Source: {getattr(node, 'metric_source', None) or 'unknown'}\n")
         if getattr(node, "self_reported_metric", None) is not None:
             f.write(f"Self Reported Metric: {node.self_reported_metric}\n")
-        if getattr(node, "hidden_metric", None) is not None:
-            f.write(f"Hidden Metric: {node.hidden_metric}\n")
 
         if hasattr(node, 'branch_id') and node.branch_id is not None:
             f.write(f"Branch ID: {node.branch_id}\n")
@@ -248,3 +247,57 @@ def update_best_solution(agent, node):
             logger.info(f"[best] updated: node {node.id}, metric={node.metric.value}")
         else:
             logger.debug(f"Node {node.id} not the best (current best: {agent.best_node.id})")
+
+
+def finalize_best_solution(agent) -> SearchNode | None:
+    """Persist the final best solution, preferring hidden validation when available."""
+    final_node = agent.best_node
+    if final_node is None:
+        return None
+
+    scoreboard = load_hidden_scoreboard(agent.cfg)
+    best_hidden_score = None
+    hidden_best_node = None
+    maximize = agent.metric_maximize if agent.metric_maximize is not None else True
+
+    for node in agent.journal.good_nodes:
+        if node.is_valid is False:
+            continue
+        report = scoreboard.get(node.id)
+        if not isinstance(report, dict) or not report.get("valid"):
+            continue
+        score = report.get("score")
+        if not isinstance(score, (int, float)):
+            continue
+        if hidden_best_node is None:
+            hidden_best_node = node
+            best_hidden_score = float(score)
+            continue
+        if maximize and float(score) > float(best_hidden_score):
+            hidden_best_node = node
+            best_hidden_score = float(score)
+        if not maximize and float(score) < float(best_hidden_score):
+            hidden_best_node = node
+            best_hidden_score = float(score)
+
+    if hidden_best_node is not None:
+        final_node = hidden_best_node
+        final_node.hidden_metric = float(best_hidden_score)
+        logger.info(
+            "[final-best] selected node %s from hidden validation with score=%s",
+            final_node.id,
+            best_hidden_score,
+        )
+    else:
+        logger.info(
+            "[final-best] no valid hidden-validation score found; keeping visible-search best node %s",
+            final_node.id,
+        )
+
+    submission_file_path = agent.cfg.workspace_dir / "submission" / f"submission_{final_node.id}.csv"
+    if submission_file_path.exists():
+        save_best_solution(agent, final_node, submission_file_path)
+    else:
+        logger.warning("Final best submission file missing for node %s", final_node.id)
+    agent.best_node = final_node
+    return final_node

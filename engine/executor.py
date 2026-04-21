@@ -102,12 +102,15 @@ class Interpreter:
     def isolate_submission_path(self, code: str, _id) -> str:
         """Per-process submission filename to avoid write conflicts."""
         target = f"submission_{_id}.csv"
-        validation_target = f"submission_validation_{_id}.csv"
+        visible_target = f"submission_visible_{_id}.csv"
+        hidden_target = f"submission_hidden_{_id}.csv"
 
         code = code.replace("submission/submission.csv", f"submission/{target}")
-        code = code.replace("submission/submission_validation.csv", f"submission/{validation_target}")
+        code = code.replace("submission/submission_visible.csv", f"submission/{visible_target}")
+        code = code.replace("submission/submission_hidden.csv", f"submission/{hidden_target}")
         code = code.replace("/submission.csv", f"/{target}")
-        code = code.replace("/submission_validation.csv", f"/{validation_target}")
+        code = code.replace("/submission_visible.csv", f"/{visible_target}")
+        code = code.replace("/submission_hidden.csv", f"/{hidden_target}")
 
         for quote in ("'", '"'):
             code = code.replace(
@@ -115,15 +118,23 @@ class Interpreter:
                 f"to_csv({quote}submission/{target}",
             )
             code = code.replace(
-                f"to_csv({quote}submission_validation.csv",
-                f"to_csv({quote}submission/{validation_target}",
+                f"to_csv({quote}submission_visible.csv",
+                f"to_csv({quote}submission/{visible_target}",
+            )
+            code = code.replace(
+                f"to_csv({quote}submission_hidden.csv",
+                f"to_csv({quote}submission/{hidden_target}",
             )
 
         for quote in ("'", '"'):
             code = code.replace(f"{quote}submission.csv{quote}", f"{quote}{target}{quote}")
             code = code.replace(
-                f"{quote}submission_validation.csv{quote}",
-                f"{quote}{validation_target}{quote}",
+                f"{quote}submission_visible.csv{quote}",
+                f"{quote}{visible_target}{quote}",
+            )
+            code = code.replace(
+                f"{quote}submission_hidden.csv{quote}",
+                f"{quote}{hidden_target}{quote}",
             )
 
         return code

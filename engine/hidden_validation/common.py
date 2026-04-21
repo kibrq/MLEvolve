@@ -52,6 +52,9 @@ def default_state() -> dict[str, Any]:
         "fallback_reason": "",
         "visible_input_dir": "",
         "visible_validation_dir": "",
+        "visible_answers_path": "",
+        "visible_sample_submission_path": "",
+        "hidden_validation_dir": "",
         "hidden_answers_path": "",
         "hidden_sample_submission_path": "",
         "manifest_path": "",
@@ -76,6 +79,28 @@ def save_runtime_state(cfg, state: dict[str, Any]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2))
     return state
+
+
+def hidden_scoreboard_path(cfg) -> Path:
+    return state_dir(cfg) / "hidden_scores.json"
+
+
+def load_hidden_scoreboard(cfg) -> dict[str, Any]:
+    path = hidden_scoreboard_path(cfg)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception as exc:
+        logger.warning("Failed to load hidden score ledger: %s", exc)
+        return {}
+
+
+def save_hidden_scoreboard(cfg, scoreboard: dict[str, Any]) -> dict[str, Any]:
+    path = hidden_scoreboard_path(cfg)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(scoreboard, indent=2))
+    return scoreboard
 
 
 def activate_fallback(cfg, state: dict[str, Any], reason: str) -> dict[str, Any]:
