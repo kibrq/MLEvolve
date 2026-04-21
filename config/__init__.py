@@ -306,6 +306,12 @@ def save_run(cfg: Config, journal):
     OmegaConf.save(config=cfg, f=cfg.log_dir / "config.yaml")
     
     # save the best found solution
+    workspace_best_solution = cfg.workspace_dir / "best_solution" / "solution.py"
+    if workspace_best_solution.exists():
+        with open(cfg.log_dir / "best_solution.py", "w") as f:
+            f.write(workspace_best_solution.read_text())
+        return
+
     best_node = journal.get_best_node()
     if best_node is not None:
         with open(cfg.log_dir / "best_solution.py", "w") as f:

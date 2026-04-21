@@ -1,5 +1,6 @@
 import atexit
 import logging
+import signal
 import sys
 import shutil
 import time
@@ -16,6 +17,7 @@ from utils.seed import set_global_seed
 from engine.coldstart import build_guidance_description
 from utils.logging_config import setup_logging
 import torch
+from engine import solution_manager
 
 
 
@@ -38,12 +40,39 @@ def run():
         prep_agent_workspace(cfg)
 
     global_step = 0
+    agent = None
+    interpreter = None
+    finalized = False
 
     def cleanup():
         if global_step == 0:
             shutil.rmtree(cfg.workspace_dir)
 
     atexit.register(cleanup)
+
+    def finalize_run() -> None:
+        nonlocal finalized
+        if finalized or agent is None:
+            return
+        try:
+            solution_manager.finalize_best_solution(agent)
+            save_run(cfg, journal)
+        except Exception:
+            logger.exception("Failed to finalize best solution during shutdown")
+        finally:
+            finalized = True
+
+    def handle_termination(signum, _frame):
+        logger.warning("Received signal %s, finalizing run before shutdown...", signum)
+        if interpreter is not None:
+            interpreter.terminate_all_subprocesses()
+        finalize_run()
+        raise SystemExit(128 + signum)
+
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    previous_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGTERM, handle_termination)
+    signal.signal(signal.SIGINT, handle_termination)
 
     journal = Journal()
     agent = Agent(
@@ -101,78 +130,85 @@ def run():
 
         logger.info(f"✅ Phase 1 complete: {len(pending_draft_nodes)} draft codes generated")
 
-    if pending_draft_nodes or completed < total_steps:
-        logger.info(f"🚀 Phase 2: Pipelined parallel execution")
-        logger.info(f"   - Pending draft executions: {len(pending_draft_nodes)}")
-        logger.info(f"   - Remaining steps: {total_steps - completed}")
+    try:
+        if pending_draft_nodes or completed < total_steps:
+            logger.info(f"🚀 Phase 2: Pipelined parallel execution")
+            logger.info(f"   - Pending draft executions: {len(pending_draft_nodes)}")
+            logger.info(f"   - Remaining steps: {total_steps - completed}")
 
-        def execute_draft_node(node):
+            def execute_draft_node(node):
+                try:
+                    executed_node = agent.execute_deferred_node(node, exec_callback)
+                    logger.info(f"✅ Draft node {executed_node.id} executed: metric={executed_node.metric.value}")
+                    return executed_node
+                except Exception as e:
+                    logger.exception(f"❌ Exception during draft node {node.id} execution: {e}")
+                    return None
+
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            interrupted = False
             try:
-                executed_node = agent.execute_deferred_node(node, exec_callback)
-                logger.info(f"✅ Draft node {executed_node.id} executed: metric={executed_node.metric.value}")
-                return executed_node
-            except Exception as e:
-                logger.exception(f"❌ Exception during draft node {node.id} execution: {e}")
-                return None
+                futures = set()
+                for i, node in enumerate(pending_draft_nodes):
+                    futures.add(executor.submit(execute_draft_node, node))
+                    logger.info(f"📤 Submitted draft execution: {node.id}")
+                    if i < len(pending_draft_nodes) - 1:
+                        time.sleep(10)
+                        logger.info(f"⏱️  Waiting 10s before next draft to stagger initialization...")
 
-        executor = ThreadPoolExecutor(max_workers=max_workers)
-        interrupted = False
+                initial_step_tasks = min(max_workers, total_steps - completed) - len(pending_draft_nodes)
+                if initial_step_tasks > 0:
+                    for _ in range(initial_step_tasks):
+                        futures.add(executor.submit(step_task))
+                        logger.info(f"📤 Submitted initial step_task to fill thread pool")
+
+                while completed < total_steps:
+                    done, _ = wait(futures, return_when=FIRST_COMPLETED, timeout=1.0)
+
+                    if not done:
+                        continue  # timeout, no completed futures, retry (allows SIGINT handling)
+
+                    for fut in done:
+                        futures.remove(fut)
+                        try:
+                            cur_node = fut.result()
+                            if cur_node:
+                                logger.info(f"✅ Task completed: node_id={cur_node.id}, step={cur_node.step}, is_buggy={cur_node.is_buggy}, metric={cur_node.metric.value if cur_node.metric else 'N/A'}")
+                            else:
+                                logger.warning(f"⚠️  Task returned None (execution failed)")
+                        except Exception as e:
+                            logger.exception(f"❌ Exception during task execution: {e}")
+                            cur_node = None
+
+                        with lock:
+                            save_run(cfg, journal)
+                            completed = len(journal) - 1  # Exclude virtual node
+                            if completed == total_steps:
+                                logger.info(journal_to_string_tree(journal))
+
+                        if completed + len(futures) < total_steps:
+                            futures.add(executor.submit(step_task, cur_node))
+                            logger.info(f"📤 Submitted next task based on node {cur_node.id if cur_node else 'None'}")
+                        logger.info(f"📊 Progress: {completed}/{total_steps} steps completed, {len(futures)} tasks running")
+            except KeyboardInterrupt:
+                interrupted = True
+                logger.info("KeyboardInterrupt received, terminating subprocesses and shutting down...")
+                interpreter.terminate_all_subprocesses()
+                executor.shutdown(wait=False, cancel_futures=True) if sys.version_info >= (3, 9) else executor.shutdown(wait=False)
+                raise
+            finally:
+                if not interrupted:
+                    executor.shutdown(wait=True)
+        else:
+            logger.info(f"✅ All steps completed in Phase 1 (total_steps={total_steps} <= initial_draft_count={initial_draft_count})")
+    finally:
         try:
-            futures = set()
-            for i, node in enumerate(pending_draft_nodes):
-                futures.add(executor.submit(execute_draft_node, node))
-                logger.info(f"📤 Submitted draft execution: {node.id}")
-                if i < len(pending_draft_nodes) - 1:
-                    time.sleep(10)
-                    logger.info(f"⏱️  Waiting 10s before next draft to stagger initialization...")
-
-            initial_step_tasks = min(max_workers, total_steps - completed) - len(pending_draft_nodes)
-            if initial_step_tasks > 0:
-                for _ in range(initial_step_tasks):
-                    futures.add(executor.submit(step_task))
-                    logger.info(f"📤 Submitted initial step_task to fill thread pool")
-
-            while completed < total_steps:
-                done, _ = wait(futures, return_when=FIRST_COMPLETED, timeout=1.0)
-
-                if not done:
-                    continue  # timeout, no completed futures, retry (allows SIGINT handling)
-
-                for fut in done:
-                    futures.remove(fut)
-                    try:
-                        cur_node = fut.result()
-                        if cur_node:
-                            logger.info(f"✅ Task completed: node_id={cur_node.id}, step={cur_node.step}, is_buggy={cur_node.is_buggy}, metric={cur_node.metric.value if cur_node.metric else 'N/A'}")
-                        else:
-                            logger.warning(f"⚠️  Task returned None (execution failed)")
-                    except Exception as e:
-                        logger.exception(f"❌ Exception during task execution: {e}")
-                        cur_node = None
-
-                    with lock:
-                        save_run(cfg, journal)
-                        completed = len(journal) - 1  # Exclude virtual node
-                        if completed == total_steps:
-                            logger.info(journal_to_string_tree(journal))
-
-                    if completed + len(futures) < total_steps:
-                        futures.add(executor.submit(step_task, cur_node))
-                        logger.info(f"📤 Submitted next task based on node {cur_node.id if cur_node else 'None'}")
-                    logger.info(f"📊 Progress: {completed}/{total_steps} steps completed, {len(futures)} tasks running")
-        except KeyboardInterrupt:
-            interrupted = True
-            logger.info("KeyboardInterrupt received, terminating subprocesses and shutting down...")
-            interpreter.terminate_all_subprocesses()
-            executor.shutdown(wait=False, cancel_futures=True) if sys.version_info >= (3, 9) else executor.shutdown(wait=False)
-            raise
+            finalize_run()
         finally:
-            if not interrupted:
-                executor.shutdown(wait=True)
-    else:
-        logger.info(f"✅ All steps completed in Phase 1 (total_steps={total_steps} <= initial_draft_count={initial_draft_count})")
-
-    interpreter.cleanup_session(-1)
+            if interpreter is not None:
+                interpreter.cleanup_session(-1)
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            signal.signal(signal.SIGINT, previous_sigint)
 
 
 if __name__ == "__main__":    

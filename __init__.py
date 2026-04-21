@@ -10,6 +10,7 @@ from omegaconf import OmegaConf
 from rich.status import Status
 from config import load_task_desc, prep_agent_workspace, save_run, _load_cfg, prep_cfg
 from pathlib import Path
+from engine import solution_manager
 
 @dataclass
 class Solution:
@@ -52,8 +53,9 @@ class Experiment:
         for _i in range(steps):
             self.agent.step(exec_callback=self.interpreter.run)
             save_run(self.cfg, self.journal)
+        solution_manager.finalize_best_solution(self.agent)
         self.interpreter.cleanup_session()
 
-        best_node = self.journal.get_best_node()
+        best_node = self.agent.best_node or self.journal.get_best_node()
         return Solution(code=best_node.code, valid_metric=best_node.metric.value)
 
