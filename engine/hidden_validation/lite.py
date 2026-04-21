@@ -11,12 +11,143 @@ from .common import (
     build_data_layout_summary,
     default_state,
     infer_competition_id,
-    load_mlebench_lite_competition_ids,
     logger,
     read_csv_rows,
     save_runtime_state,
 )
 from .verify import verify_split_artifacts
+
+
+GENERIC_DATAFRAME_COMPETITION_CONFIGS = {
+    "aptos2019-blindness-detection": {
+        "train_csv": "train.csv", "id": "id_code", "target": "diagnosis",
+        "validation_cols": ["id_code"], "assets": [("train_images", "test_images", [".png"], None)],
+    },
+    "aerial-cactus-identification": {
+        "train_csv": "train.csv", "id": "id", "target": "has_cactus",
+        "validation_cols": ["id"], "assets": [("train", "test", [".jpg"], None)],
+    },
+    "dog-breed-identification": {
+        "train_csv": "labels.csv", "id": "id", "target": "breed", "one_hot": True,
+        "validation_cols": ["id"], "assets": [("train", "test", [".jpg"], None)],
+    },
+    "histopathologic-cancer-detection": {
+        "train_csv": "train_labels.csv", "id": "id", "target": "label",
+        "validation_cols": ["id"], "assets": [("train", "test", [".tif"], None)],
+    },
+    "jigsaw-toxic-comment-classification-challenge": {
+        "train_csv": "train.csv", "id": "id",
+        "target_cols": ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"],
+        "validation_drop": ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"],
+        "assets": [],
+    },
+    "jigsaw-unintended-bias-in-toxicity-classification": {
+        "train_csv": "train.csv", "id": "id", "target": "target",
+        "validation_cols": ["id", "comment_text"], "assets": [],
+    },
+    "leaf-classification": {
+        "train_csv": "train.csv", "id": "id", "target": "species", "one_hot": True,
+        "validation_cols": ["id"], "assets": [("images", "images", [".jpg"], "test.csv")],
+    },
+    "imet-2020-fgvc7": {
+        "train_csv": "train.csv", "id": "id", "target": "attribute_ids",
+        "validation_cols": ["id"], "assets": [("train", "test", [".png"], None)],
+    },
+    "new-york-city-taxi-fare-prediction": {
+        "train_csv": "labels.csv", "id": "key", "target": "fare_amount",
+        "validation_drop": ["fare_amount"], "assets": [],
+    },
+    "nomad2018-predict-transparent-conductors": {
+        "train_csv": "train.csv", "id": "id",
+        "target_cols": ["formation_energy_ev_natom", "bandgap_energy_ev"],
+        "validation_drop": ["formation_energy_ev_natom", "bandgap_energy_ev"],
+        "assets": [("train", "test", ["/geometry.xyz"], None)],
+    },
+    "plant-pathology-2020-fgvc7": {
+        "train_csv": "train.csv", "id": "image_id",
+        "target_cols": ["healthy", "multiple_diseases", "rust", "scab"],
+        "validation_cols": ["image_id"], "assets": [("images", "images", [".jpg"], "test.csv")],
+    },
+    "plant-pathology-2021-fgvc8": {
+        "train_csv": "train.csv", "id": "image", "target": "labels",
+        "validation_cols": ["image"], "assets": [("train_images", "test_images", [".jpg"], None)],
+    },
+    "petfinder-pawpularity-score": {
+        "train_csv": "train.csv", "id": "Id", "target": "Pawpularity",
+        "validation_drop": ["Pawpularity"], "assets": [("train", "test", [".jpg"], None)],
+    },
+    "ranzcr-clip-catheter-line-classification": {
+        "train_csv": "train.csv", "id": "StudyInstanceUID",
+        "target_cols": [
+            "ETT - Abnormal", "ETT - Borderline", "ETT - Normal",
+            "NGT - Abnormal", "NGT - Borderline", "NGT - Incompletely Imaged",
+            "NGT - Normal", "CVC - Abnormal", "CVC - Borderline",
+        ],
+        "validation_cols": ["StudyInstanceUID"], "assets": [("train", "test", [".jpg"], None)],
+        "filter_annotations": True,
+    },
+    "siim-isic-melanoma-classification": {
+        "train_csv": "train.csv", "id": "image_name", "target": "target",
+        "validation_cols": ["image_name", "patient_id", "sex", "age_approx", "anatom_site_general_challenge"],
+        "assets": [("train", "test", [".dcm"], None), ("jpeg/train", "jpeg/test", [".jpg"], None)],
+    },
+    "spooky-author-identification": {
+        "train_csv": "train.csv", "id": "id", "target": "author", "one_hot": True,
+        "validation_drop": ["author"], "assets": [],
+    },
+    "tweet-sentiment-extraction": {
+        "train_csv": "train.csv", "id": "textID", "target": "selected_text",
+        "validation_drop": ["selected_text"], "assets": [],
+    },
+    "tabular-playground-series-dec-2021": {
+        "train_csv": "train.csv", "id": "Id", "target": "Cover_Type",
+        "validation_drop": ["Cover_Type"], "assets": [],
+    },
+    "tabular-playground-series-may-2022": {
+        "train_csv": "train.csv", "id": "id", "target": "target",
+        "validation_drop": ["target"], "assets": [],
+    },
+    "us-patent-phrase-to-phrase-matching": {
+        "train_csv": "train.csv", "id": "id", "target": "score",
+        "validation_drop": ["score"], "assets": [],
+    },
+}
+
+SPECIAL_CASE_DETERMINISTIC_COMPETITIONS = {
+    "billion-word-imputation",
+    "bms-molecular-translation",
+    "cassava-leaf-disease-classification",
+    "champs-scalar-coupling",
+    "denoising-dirty-documents",
+    "detecting-insults-in-social-commentary",
+    "dogs-vs-cats-redux-kernels-edition",
+    "freesound-audio-tagging-2019",
+    "h-and-m-personalized-fashion-recommendations",
+    "hms-harmful-brain-activity-classification",
+    "hotel-id-2021-fgvc8",
+    "hubmap-kidney-segmentation",
+    "kuzushiji-recognition",
+    "mlsp-2013-birds",
+    "multi-modal-gesture-recognition",
+    "nfl-player-contact-detection",
+    "osic-pulmonary-fibrosis-progression",
+    "random-acts-of-pizza",
+    "smartphone-decimeter-2022",
+    "stanford-covid-vaccine",
+    "tensorflow2-question-answering",
+    "text-normalization-challenge-english-language",
+    "text-normalization-challenge-russian-language",
+    "the-icml-2013-whale-challenge-right-whale-redux",
+    "uw-madison-gi-tract-image-segmentation",
+    "ventilator-pressure-prediction",
+    "whale-categorization-playground",
+}
+
+
+def supported_deterministic_competition_ids() -> set[str]:
+    return set(GENERIC_DATAFRAME_COMPETITION_CONFIGS) | set(
+        SPECIAL_CASE_DETERMINISTIC_COMPETITIONS
+    )
 
 
 def _copy_path(src: Path, dst: Path) -> None:
@@ -353,6 +484,20 @@ def _split_df_basic(df, competition_id: str, visible_output: Path):
     return train_test_split(df, test_size=test_size, random_state=0, stratify=stratify)
 
 
+def _split_df_by_group(df, group_col: str, test_size: float = 0.1):
+    from sklearn.model_selection import train_test_split
+
+    group_values = sorted(df[group_col].dropna().unique().tolist())
+    keep_groups, validation_groups = train_test_split(
+        group_values,
+        test_size=test_size,
+        random_state=0,
+    )
+    keep_df = df[df[group_col].isin(set(keep_groups))].copy()
+    validation_df = df[df[group_col].isin(set(validation_groups))].copy()
+    return keep_df, validation_df
+
+
 def _split_asset_dir_with_ids(
     source_dir: Path,
     train_target_dir: Path,
@@ -434,76 +579,7 @@ def _prepare_generic_dataframe_second_split(
     import pandas as pd
     from mlebench.competitions.utils import df_to_one_hot
 
-    config = {
-        "aptos2019-blindness-detection": {
-            "train_csv": "train.csv", "id": "id_code", "target": "diagnosis",
-            "validation_cols": ["id_code"], "assets": [("train_images", "test_images", [".png"], None)],
-        },
-        "aerial-cactus-identification": {
-            "train_csv": "train.csv", "id": "id", "target": "has_cactus",
-            "validation_cols": ["id"], "assets": [("train", "test", [".jpg"], None)],
-        },
-        "dog-breed-identification": {
-            "train_csv": "labels.csv", "id": "id", "target": "breed", "one_hot": True,
-            "validation_cols": ["id"], "assets": [("train", "test", [".jpg"], None)],
-        },
-        "histopathologic-cancer-detection": {
-            "train_csv": "train_labels.csv", "id": "id", "target": "label",
-            "validation_cols": ["id"], "assets": [("train", "test", [".tif"], None)],
-        },
-        "jigsaw-toxic-comment-classification-challenge": {
-            "train_csv": "train.csv", "id": "id",
-            "target_cols": ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"],
-            "validation_drop": ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"],
-            "assets": [],
-        },
-        "leaf-classification": {
-            "train_csv": "train.csv", "id": "id", "target": "species", "one_hot": True,
-            "validation_cols": ["id"], "assets": [("images", "images", [".jpg"], "test.csv")],
-        },
-        "new-york-city-taxi-fare-prediction": {
-            "train_csv": "labels.csv", "id": "key", "target": "fare_amount",
-            "validation_drop": ["fare_amount"], "assets": [],
-        },
-        "nomad2018-predict-transparent-conductors": {
-            "train_csv": "train.csv", "id": "id",
-            "target_cols": ["formation_energy_ev_natom", "bandgap_energy_ev"],
-            "validation_drop": ["formation_energy_ev_natom", "bandgap_energy_ev"],
-            "assets": [("train", "test", ["/geometry.xyz"], None)],
-        },
-        "plant-pathology-2020-fgvc7": {
-            "train_csv": "train.csv", "id": "image_id",
-            "target_cols": ["healthy", "multiple_diseases", "rust", "scab"],
-            "validation_cols": ["image_id"], "assets": [("images", "images", [".jpg"], "test.csv")],
-        },
-        "ranzcr-clip-catheter-line-classification": {
-            "train_csv": "train.csv", "id": "StudyInstanceUID",
-            "target_cols": [
-                "ETT - Abnormal", "ETT - Borderline", "ETT - Normal",
-                "NGT - Abnormal", "NGT - Borderline", "NGT - Incompletely Imaged",
-                "NGT - Normal", "CVC - Abnormal", "CVC - Borderline",
-            ],
-            "validation_cols": ["StudyInstanceUID"], "assets": [("train", "test", [".jpg"], None)],
-            "filter_annotations": True,
-        },
-        "siim-isic-melanoma-classification": {
-            "train_csv": "train.csv", "id": "image_name", "target": "target",
-            "validation_cols": ["image_name", "patient_id", "sex", "age_approx", "anatom_site_general_challenge"],
-            "assets": [("train", "test", [".dcm"], None), ("jpeg/train", "jpeg/test", [".jpg"], None)],
-        },
-        "spooky-author-identification": {
-            "train_csv": "train.csv", "id": "id", "target": "author", "one_hot": True,
-            "validation_drop": ["author"], "assets": [],
-        },
-        "tabular-playground-series-dec-2021": {
-            "train_csv": "train.csv", "id": "Id", "target": "Cover_Type",
-            "validation_drop": ["Cover_Type"], "assets": [],
-        },
-        "tabular-playground-series-may-2022": {
-            "train_csv": "train.csv", "id": "id", "target": "target",
-            "validation_drop": ["target"], "assets": [],
-        },
-    }[competition_id]
+    config = GENERIC_DATAFRAME_COMPETITION_CONFIGS[competition_id]
 
     train_csv_path = visible_output / config["train_csv"]
     df = pd.read_csv(train_csv_path)
@@ -560,6 +636,940 @@ def _prepare_generic_dataframe_second_split(
     return {
         "authoritative_train_sources": _collect_authoritative_train_sources(visible_output),
         "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_whale_categorization_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_basic(train_df, "whale-categorization-playground", visible_output)
+    unseen_ids = set(val_df["Id"]) - set(keep_df["Id"])
+    answers_df = val_df[["Image", "Id"]].copy()
+    if unseen_ids:
+        answers_df.loc[answers_df["Id"].isin(unseen_ids), "Id"] = "new_whale"
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["Image"]].to_csv(validation_dir / "validation.csv", index=False)
+    answers_df.to_csv(hidden_answers_path, index=False)
+
+    sample_df = pd.DataFrame({"Image": answers_df["Image"], "Id": "new_whale w_1287fbc w_98baff9 w_7554f44 w_1eafe46"})
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    _split_asset_dir_with_ids(
+        visible_output / "train",
+        visible_output / "train",
+        validation_dir / "validation",
+        [str(v) for v in keep_df["Image"].tolist()],
+        [str(v) for v in val_df["Image"].tolist()],
+        [""],
+    )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_ventilator_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_by_group(train_df, "breath_id", test_size=0.1)
+    keep_df = keep_df.copy()
+    val_df = val_df.copy()
+    keep_df["id"] = range(1, len(keep_df) + 1)
+    val_df["id"] = range(1, len(val_df) + 1)
+
+    keep_df.to_csv(visible_output / "train.csv", index=False, float_format="%.10g")
+    val_df.drop(columns=["pressure"]).to_csv(
+        validation_dir / "validation.csv", index=False, float_format="%.10g"
+    )
+    val_df[["id", "pressure"]].to_csv(hidden_answers_path, index=False, float_format="%.10g")
+    sample_df = pd.DataFrame({"id": val_df["id"], "pressure": 0.0})
+    sample_df.to_csv(hidden_sample_submission_path, index=False, float_format="%.10g")
+    sample_df.to_csv(visible_sample_submission_path, index=False, float_format="%.10g")
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_champs_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_by_group(train_df, "molecule_name", test_size=0.1)
+    keep_molecules = set(keep_df["molecule_name"])
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df.drop(columns=["scalar_coupling_constant"]).to_csv(validation_dir / "validation.csv", index=False)
+    val_df[["id", "scalar_coupling_constant"]].to_csv(hidden_answers_path, index=False)
+    sample_df = pd.DataFrame({"id": val_df["id"], "scalar_coupling_constant": 0.0})
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    for name in [
+        "structures.csv",
+        "dipole_moments.csv",
+        "magnetic_shielding_tensors.csv",
+        "mulliken_charges.csv",
+        "potential_energy.csv",
+        "scalar_coupling_contributions.csv",
+    ]:
+        path = visible_output / name
+        if path.exists():
+            df = pd.read_csv(path)
+            df[df["molecule_name"].isin(keep_molecules)].to_csv(path, index=False)
+
+    _split_asset_dir_with_ids(
+        visible_output / "structures",
+        visible_output / "structures",
+        validation_dir / "_unused",
+        sorted(keep_molecules),
+        [],
+        [".xyz"],
+    )
+    if (validation_dir / "_unused").exists():
+        shutil.rmtree(validation_dir / "_unused")
+
+    return {
+        "authoritative_train_sources": _collect_authoritative_train_sources(visible_output),
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_osic_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_by_group(train_df, "Patient", test_size=0.1)
+    keep_patients = set(keep_df["Patient"])
+    val_patients = set(val_df["Patient"])
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_public = val_df.sort_values(by="Weeks").groupby("Patient").first().reset_index()
+    val_public.to_csv(validation_dir / "validation.csv", index=False)
+
+    all_weeks = pd.DataFrame(
+        [
+            (patient, week)
+            for patient in sorted(val_patients)
+            for week in range(int(val_df["Weeks"].min()), int(val_df["Weeks"].max()) + 1)
+        ],
+        columns=["Patient", "Weeks"],
+    )
+    answers_df = all_weeks.merge(val_df, on=["Patient", "Weeks"], how="left")
+    answers_df["Patient_Week"] = answers_df["Patient"] + "_" + answers_df["Weeks"].astype(str)
+    answers_df["Confidence"] = 100
+    answers_df.to_csv(hidden_answers_path, index=False)
+
+    sample_df = answers_df[["Patient_Week"]].copy()
+    sample_df["FVC"] = 2000
+    sample_df["Confidence"] = 100
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    backup = visible_output / ".train_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    if (visible_output / "train").exists():
+        (visible_output / "train").rename(backup)
+        (visible_output / "train").mkdir(parents=True, exist_ok=True)
+        for patient in sorted(keep_patients):
+            src = backup / patient
+            if src.exists():
+                shutil.copytree(src, visible_output / "train" / patient, dirs_exist_ok=True)
+        for patient in sorted(val_patients):
+            src = backup / patient
+            if src.exists():
+                shutil.copytree(src, validation_dir / patient, dirs_exist_ok=True)
+        shutil.rmtree(backup)
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_hotel_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    if "image" not in train_df.columns:
+        raise RuntimeError("hotel-id adapter expected train.csv with image column")
+    keep_df, val_df = _split_df_basic(train_df, "hotel-id-2021-fgvc8", visible_output)
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["image"]].to_csv(validation_dir / "validation.csv", index=False)
+    val_df[["image", "hotel_id"]].to_csv(hidden_answers_path, index=False)
+    sample_df = pd.DataFrame(
+        {"image": val_df["image"], "hotel_id": "36363 53586 18807 64314 60181"}
+    )
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    backup = visible_output / ".train_images_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train_images").rename(backup)
+    (visible_output / "train_images").mkdir(parents=True, exist_ok=True)
+    (validation_dir / "validation_images").mkdir(parents=True, exist_ok=True)
+    for _, row in keep_df.iterrows():
+        chain = str(row["chain"])
+        src = backup / chain / row["image"]
+        if src.exists():
+            dst = visible_output / "train_images" / chain / row["image"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+    for _, row in val_df.iterrows():
+        chain = str(row["chain"])
+        src = backup / chain / row["image"]
+        if src.exists():
+            shutil.copy2(src, validation_dir / "validation_images" / row["image"])
+    shutil.rmtree(backup)
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_images")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_stanford_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_json(visible_output / "train.json", lines=True)
+    test_template_df = pd.read_json(visible_output / "test.json", lines=True)
+    to_predict = ["reactivity", "deg_Mg_pH10", "deg_pH10", "deg_Mg_50C", "deg_50C"]
+    n_test_samples = max(1, int(len(train_df) * 0.1))
+    test_indices = train_df[train_df["SN_filter"] > 0].sample(n=n_test_samples, random_state=0).index
+    keep_df = train_df.drop(index=test_indices).copy()
+    val_df = train_df.loc[test_indices].copy()
+
+    records = []
+    for _, row in val_df.iterrows():
+        n = int(row["seq_scored"])
+        k = int(row["seq_length"])
+        for j in range(n):
+            records.append(
+                {
+                    "id_seqpos": f"{row['id']}_{j}",
+                    "reactivity": row["reactivity"][j],
+                    "deg_Mg_pH10": row["deg_Mg_pH10"][j],
+                    "deg_pH10": row["deg_pH10"][j],
+                    "deg_Mg_50C": row["deg_Mg_50C"][j],
+                    "deg_50C": row["deg_50C"][j],
+                }
+            )
+        for j in range(n, k):
+            records.append(
+                {
+                    "id_seqpos": f"{row['id']}_{j}",
+                    "reactivity": 0.0,
+                    "deg_Mg_pH10": 0.0,
+                    "deg_pH10": 0.0,
+                    "deg_Mg_50C": 0.0,
+                    "deg_50C": 0.0,
+                }
+            )
+
+    keep_df["index"] = range(len(keep_df))
+    keep_df.to_json(visible_output / "train.json", orient="records", lines=True)
+    val_public = val_df[test_template_df.columns].copy()
+    val_public["index"] = range(len(val_public))
+    val_public.to_json(validation_dir / "validation.json", orient="records", lines=True)
+
+    answers_df = pd.DataFrame(records)
+    answers_df.to_csv(hidden_answers_path, index=False, float_format="%.10f")
+    sample_df = answers_df.copy()
+    sample_df.loc[:, to_predict] = 0.0
+    sample_df.to_csv(hidden_sample_submission_path, index=False, float_format="%.10f")
+    sample_df.to_csv(visible_sample_submission_path, index=False, float_format="%.10f")
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.json")],
+        "authoritative_validation_sources": ["validation/validation.json"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_bms_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    def _make_image_subpath(image_id: str) -> Path:
+        return Path(image_id[0]) / image_id[1] / image_id[2] / f"{image_id}.png"
+
+    train_df = pd.read_csv(visible_output / "train_labels.csv")
+    keep_df, val_df = train_test_split(train_df, test_size=0.2, random_state=0)
+    keep_df.to_csv(visible_output / "train_labels.csv", index=False)
+    val_df[["image_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    val_df.to_csv(hidden_answers_path, index=False)
+    sample_df = val_df[["image_id"]].copy()
+    sample_df["InChI"] = "InChI=1S/H2O/h1H2"
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    backup = visible_output / ".train_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train").rename(backup)
+    (visible_output / "train").mkdir(parents=True, exist_ok=True)
+    for image_id in keep_df["image_id"].tolist():
+        rel = _make_image_subpath(str(image_id))
+        src = backup / rel
+        dst = visible_output / "train" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src.exists():
+            shutil.copy2(src, dst)
+    for image_id in val_df["image_id"].tolist():
+        rel = _make_image_subpath(str(image_id))
+        src = backup / rel
+        dst = validation_dir / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src.exists():
+            shutil.copy2(src, dst)
+    shutil.rmtree(backup)
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train_labels.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_h_and_m_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "transactions_train.csv")
+    train_df["t_dat_parsed"] = pd.to_datetime(train_df["t_dat"])
+    max_date = train_df["t_dat_parsed"].max()
+    keep_df = train_df[train_df["t_dat_parsed"] < (max_date - pd.Timedelta(days=7))].copy()
+    val_df = train_df[train_df["t_dat_parsed"] >= (max_date - pd.Timedelta(days=7))].copy()
+    keep_df.drop(columns=["t_dat_parsed"], inplace=True)
+    val_df.drop(columns=["t_dat_parsed"], inplace=True)
+
+    keep_df.to_csv(visible_output / "transactions_train.csv", index=False)
+    answers_df = (
+        val_df.groupby("customer_id")["article_id"]
+        .apply(lambda x: " ".join(x.astype(str)))
+        .reset_index()
+        .rename(columns={"article_id": "prediction"})
+    )
+    answers_df.to_csv(hidden_answers_path, index=False)
+    answers_df[["customer_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    sample_df = answers_df.copy()
+    sample_df["prediction"] = ""
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    return {
+        "authoritative_train_sources": _collect_authoritative_train_sources(visible_output),
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_cassava_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from mlebench.competitions.utils import get_ids_from_tf_records
+    from sklearn.model_selection import train_test_split
+
+    tfrecord_files = [
+        path
+        for path in sorted((visible_output / "train_tfrecords").iterdir())
+        if path.is_file() and path.suffix == ".tfrec"
+    ]
+    keep_tfrec, val_tfrec = train_test_split(tfrecord_files, test_size=0.1, random_state=0)
+    val_ids: list[str] = []
+    for path in val_tfrec:
+        val_ids.extend(get_ids_from_tf_records(path))
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df = train_df[~train_df["image_id"].isin(val_ids)].copy()
+    val_df = train_df[train_df["image_id"].isin(val_ids)].copy()
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["image_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    val_df.to_csv(hidden_answers_path, index=False)
+    sample_df = val_df[["image_id"]].copy()
+    sample_df["label"] = 4
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    backup = visible_output / ".train_tfrecords_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train_tfrecords").rename(backup)
+    (visible_output / "train_tfrecords").mkdir(parents=True, exist_ok=True)
+    (validation_dir / "validation_tfrecords").mkdir(parents=True, exist_ok=True)
+    for path in keep_tfrec:
+        shutil.copy2(backup / path.name, visible_output / "train_tfrecords" / path.name)
+    for path in val_tfrec:
+        shutil.copy2(backup / path.name, validation_dir / "validation_tfrecords" / path.name)
+    shutil.rmtree(backup)
+
+    _split_asset_dir_with_ids(
+        visible_output / "train_images",
+        visible_output / "train_images",
+        validation_dir / "validation_images",
+        [str(v) for v in keep_df["image_id"].tolist()],
+        [str(v) for v in val_df["image_id"].tolist()],
+        [""],
+    )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_tfrecords"), str(visible_output / "train_images")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_hms_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_by_group(train_df, "spectrogram_id", test_size=0.1)
+    sample_template_df, _ = _load_sample_submission_template(
+        visible_output,
+        "hms-harmful-brain-activity-classification",
+    )
+    target_cols = [col for col in sample_template_df.columns if col != "eeg_id"]
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["spectrogram_id", "eeg_id", "patient_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    answers_df = val_df[["eeg_id"] + target_cols].copy()
+    answers_df[target_cols] = answers_df[target_cols].div(answers_df[target_cols].sum(axis=1), axis=0)
+    answers_df.to_csv(hidden_answers_path, index=False)
+    sample_df = answers_df.copy()
+    sample_df[target_cols] = 1 / len(target_cols)
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    keep_eegs = [str(v) for v in sorted(keep_df["eeg_id"].dropna().unique().tolist())]
+    val_eegs = [str(v) for v in sorted(val_df["eeg_id"].dropna().unique().tolist())]
+    keep_specs = [str(v) for v in sorted(keep_df["spectrogram_id"].dropna().unique().tolist())]
+    val_specs = [str(v) for v in sorted(val_df["spectrogram_id"].dropna().unique().tolist())]
+    _split_asset_dir_with_ids(
+        visible_output / "train_eegs",
+        visible_output / "train_eegs",
+        validation_dir / "validation_eegs",
+        keep_eegs,
+        val_eegs,
+        [".parquet"],
+    )
+    _split_asset_dir_with_ids(
+        visible_output / "train_spectrograms",
+        visible_output / "train_spectrograms",
+        validation_dir / "validation_spectrograms",
+        keep_specs,
+        val_specs,
+        [".parquet"],
+    )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_eegs"), str(visible_output / "train_spectrograms")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_smartphone_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    def _get_date(folder_name: str) -> str:
+        year, month, day, *_rest = folder_name.split("-")
+        return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+
+    train_ids = sorted([folder.name for folder in (visible_output / "train").glob("*") if folder.is_dir()])
+    dates = sorted({_get_date(name) for name in train_ids})
+    keep_dates, val_dates = train_test_split(dates, test_size=0.1, random_state=0)
+    keep_ids = [name for name in train_ids if _get_date(name) in set(keep_dates)]
+    val_ids = [name for name in train_ids if _get_date(name) in set(val_dates)]
+
+    backup = visible_output / ".train_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train").rename(backup)
+    (visible_output / "train").mkdir(parents=True, exist_ok=True)
+    for folder_name in keep_ids:
+        shutil.copytree(backup / folder_name, visible_output / "train" / folder_name, dirs_exist_ok=True)
+    for folder_name in val_ids:
+        shutil.copytree(backup / folder_name, validation_dir / folder_name, dirs_exist_ok=True)
+    shutil.rmtree(backup)
+
+    dfs = []
+    for fpath in sorted(validation_dir.rglob("ground_truth.csv")):
+        drive_id = fpath.parent.parent.name
+        phone_id = fpath.parent.name
+        raw_df = pd.read_csv(fpath)
+        df = raw_df.copy()
+        df.loc[:, "tripId"] = f"{drive_id}-{phone_id}"
+        df = df[["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"]]
+        dfs.append(df)
+        fpath.unlink()
+    answers_df = pd.concat(dfs, ignore_index=True)
+    answers_df.to_csv(hidden_answers_path, index=False)
+    val_visible_df = answers_df[["tripId", "UnixTimeMillis"]].copy()
+    val_visible_df.to_csv(validation_dir / "validation.csv", index=False)
+    sample_df = answers_df.copy()
+    sample_df.loc[:, "LatitudeDegrees"] = 37.904611315634504
+    sample_df.loc[:, "LongitudeDegrees"] = -86.48107806249548
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    return {
+        "authoritative_train_sources": [str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_nfl_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train_labels.csv")
+    keep_df, val_df = _split_df_by_group(train_df, "game_play", test_size=0.1)
+    keep_game_plays = set(keep_df["game_play"])
+    val_game_plays = set(val_df["game_play"])
+
+    keep_df.to_csv(visible_output / "train_labels.csv", index=False)
+    val_df[["contact_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    val_df[["contact_id", "contact"]].to_csv(hidden_answers_path, index=False)
+    sample_df = pd.DataFrame({"contact_id": val_df["contact_id"], "contact": 0})
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    for src_name, key in [
+        ("train_baseline_helmets.csv", "game_play"),
+        ("train_player_tracking.csv", "game_play"),
+        ("train_video_metadata.csv", "game_play"),
+    ]:
+        df = pd.read_csv(visible_output / src_name)
+        df[df[key].isin(keep_game_plays)].to_csv(visible_output / src_name, index=False)
+        df[df[key].isin(val_game_plays)].to_csv(validation_dir / src_name.replace("train_", "validation_"), index=False)
+
+    backup = visible_output / ".train_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train").rename(backup)
+    (visible_output / "train").mkdir(parents=True, exist_ok=True)
+    for path in backup.glob("*.mp4"):
+        game_play = path.name.rsplit("_", 1)[0]
+        if game_play in keep_game_plays:
+            shutil.copy2(path, visible_output / "train" / path.name)
+        elif game_play in val_game_plays:
+            shutil.copy2(path, validation_dir / path.name)
+    shutil.rmtree(backup)
+
+    return {
+        "authoritative_train_sources": [str(visible_output / "train_labels.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_kuzushiji_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    keep_df, val_df = _split_df_basic(train_df, "kuzushiji-recognition", visible_output)
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["image_id"]].to_csv(validation_dir / "validation.csv", index=False)
+    val_df.to_csv(hidden_answers_path, index=False)
+    sample_df = val_df[["image_id"]].copy()
+    sample_df["labels"] = "U+003F 1 1 U+FF2F 2 2"
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    _split_asset_dir_with_ids(
+        visible_output / "train_images",
+        visible_output / "train_images",
+        validation_dir / "validation_images",
+        [str(v) for v in keep_df["image_id"].tolist()],
+        [str(v) for v in val_df["image_id"].tolist()],
+        [".jpg"],
+    )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_images")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_hubmap_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    dataset_info = pd.read_csv(visible_output / "HuBMAP-20-dataset_information.csv")
+    dataset_info["id"] = dataset_info["image_file"].str.replace(".tiff", "", regex=False)
+    keep_df, val_df = train_test_split(train_df, test_size=max(1, min(3, len(train_df) - 1)), random_state=0)
+    val_with_dims = val_df.merge(dataset_info[["id", "width_pixels", "height_pixels"]], on="id")
+
+    keep_df.to_csv(visible_output / "train.csv", index=False)
+    val_df[["id"]].to_csv(validation_dir / "validation.csv", index=False)
+    pd.DataFrame({"id": val_with_dims["id"], "predicted": val_with_dims["encoding"]}).to_csv(
+        hidden_answers_path, index=False
+    )
+    sample_df = pd.DataFrame({"id": val_with_dims["id"], "predicted": ""})
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    keep_ids = [str(v) for v in keep_df["id"].tolist()]
+    val_ids = [str(v) for v in val_df["id"].tolist()]
+    for suffixes in [[".tiff"], [".json"], ["-anatomical-structure.json"]]:
+        _split_asset_dir_with_ids(
+            visible_output / "train",
+            visible_output / "train",
+            validation_dir / "validation",
+            keep_ids,
+            val_ids,
+            suffixes,
+        )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_uw_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    train_df = pd.read_csv(visible_output / "train.csv")
+    train_df["case"] = train_df["id"].apply(lambda x: x.split("_")[0])
+    train_df["day"] = train_df["id"].apply(lambda x: x.split("_")[1])
+    train_df["slice"] = train_df["id"].apply(lambda x: x.split("_")[-1])
+    unique_cases = train_df["case"].unique()
+    keep_cases, val_cases = train_test_split(unique_cases, test_size=0.1, random_state=42)
+    train_df["set"] = train_df["case"].apply(lambda x: "validation" if x in set(val_cases) else "train")
+    days_df = train_df[train_df["set"] == "train"].groupby("case")["day"].apply(set).reset_index()
+    for _, row in days_df.iterrows():
+        days = row["day"]
+        if len(days) > 4:
+            days = sorted(days, key=lambda x: int(x[len("day"):]))
+            days_to_move = days[4:]
+            train_df.loc[train_df["case"].eq(row["case"]) & train_df["day"].isin(days_to_move), "set"] = "validation"
+
+    keep_df = train_df[train_df["set"] == "train"].copy()
+    val_df = train_df[train_df["set"] == "validation"].copy()
+
+    backup = visible_output / ".train_hidden_validation_source"
+    if backup.exists():
+        shutil.rmtree(backup)
+    (visible_output / "train").rename(backup)
+    (visible_output / "train").mkdir(parents=True, exist_ok=True)
+    for case in unique_cases:
+        source = backup / case
+        if not source.exists():
+            continue
+        target = (validation_dir if case in set(val_cases) else visible_output / "train") / case
+        shutil.copytree(source, target, dirs_exist_ok=True)
+    for _, row in val_df.iterrows():
+        source = visible_output / "train" / row["case"] / f"{row['case']}_{row['day']}"
+        target = validation_dir / row["case"] / f"{row['case']}_{row['day']}"
+        if source.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(source.as_posix(), target.as_posix())
+    shutil.rmtree(backup)
+
+    for _, row in val_df.iterrows():
+        image_paths = list((validation_dir / row["case"] / f"{row['case']}_{row['day']}" / "scans").glob(f"slice_{row['slice']}_*.png"))
+        if len(image_paths) == 1:
+            width, height = (int(length) for length in image_paths[0].stem.split("_")[2:4])
+            val_df.loc[row.name, "image_width"] = width
+            val_df.loc[row.name, "image_height"] = height
+    keep_df.drop(columns=["set", "case", "day", "slice"], inplace=True)
+    val_df.drop(columns=["set", "case", "day", "slice"], inplace=True)
+    keep_df.to_csv(visible_output / "train.csv", index=False, na_rep="")
+    val_visible = val_df.drop(columns=["segmentation", "image_width", "image_height"]).copy()
+    val_visible.to_csv(validation_dir / "validation.csv", index=False, na_rep="")
+    val_private = val_df.rename(columns={"segmentation": "predicted"})
+    val_private.to_csv(hidden_answers_path, index=False, na_rep="")
+    sample_df = val_private.drop(columns=["image_width", "image_height"]).copy()
+    sample_df["predicted"] = "1 1 5 2"
+    sample_df.to_csv(hidden_sample_submission_path, index=False, na_rep="")
+    sample_df.to_csv(visible_sample_submission_path, index=False, na_rep="")
+    return {
+        "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_multimodal_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    import tarfile
+
+    archive_candidates = sorted(visible_output.glob("training*.tar.gz"))
+    if not archive_candidates:
+        raise RuntimeError("multi-modal adapter expected at least one training*.tar.gz archive")
+    archive_path = archive_candidates[-1]
+    archive_name = archive_path.name
+
+    with tarfile.open(archive_path, "r:gz") as tar:
+        member_ids = sorted(
+            {
+                Path(member.name).stem[-4:]
+                for member in tar.getmembers()
+                if member.isfile() and member.name.endswith(".zip")
+            }
+        )
+    if not member_ids:
+        raise RuntimeError("multi-modal adapter could not derive validation ids from training3.tar.gz")
+
+    training_df = pd.read_csv(visible_output / "training.csv", dtype={"Id": str, "Sequence": str})
+    keep_df = training_df[~training_df["Id"].isin(member_ids)].copy()
+    val_df = training_df[training_df["Id"].isin(member_ids)].copy()
+    keep_df.to_csv(visible_output / "training.csv", index=False)
+    pd.DataFrame({"Id": member_ids}).to_csv(validation_dir / "validation.csv", index=False)
+    val_df.to_csv(hidden_answers_path, index=False)
+    sample_df = pd.DataFrame({"Id": member_ids, "Sequence": [" ".join(str(x) for x in range(1, 21))] * len(member_ids)})
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    archive_path.rename(visible_output / f"holdout_{archive_name}")
+    shutil.copy2(visible_output / f"holdout_{archive_name}", validation_dir / "validation.tar.gz")
+    return {
+        "authoritative_train_sources": [str(visible_output / "training.csv")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_billion_word_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.RandomState(0)
+    train_path = visible_output / "train_v2.txt"
+    if not train_path.exists():
+        raise RuntimeError("billion-word adapter expected extracted train_v2.txt")
+
+    kept_lines: list[str] = []
+    visible_rows: list[dict[str, Any]] = []
+    answer_rows: list[dict[str, Any]] = []
+    submission_lines: list[str] = []
+    with train_path.open() as f:
+        for sentence in f:
+            stripped = sentence.strip()
+            words = stripped.split()
+            if len(words) > 2 and rng.uniform() <= 0.01:
+                idx = rng.randint(1, len(words) - 1)
+                removed = " ".join(words[:idx] + words[idx + 1 :])
+                row_id = len(answer_rows)
+                visible_rows.append({"id": row_id, "sentence": removed})
+                answer_rows.append({"id": row_id, "sentence": stripped})
+                submission_lines.append(removed)
+            else:
+                kept_lines.append(sentence)
+
+    train_path.write_text("".join(kept_lines))
+    pd.DataFrame(visible_rows).to_csv(validation_dir / "validation.csv", index=False)
+    pd.DataFrame(answer_rows).to_csv(hidden_answers_path, index=False)
+    validation_txt = validation_dir / "validation_v2.txt"
+    validation_txt.write_text("\n".join(submission_lines) + ("\n" if submission_lines else ""))
+    hidden_sample_submission_path.write_text(validation_txt.read_text())
+    visible_sample_submission_path.write_text(validation_txt.read_text())
+    return {
+        "authoritative_train_sources": [str(visible_output / "train_v2.txt")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_freesound_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+
+    train_csv = visible_output / "train_curated.csv"
+    if not train_csv.exists():
+        raise RuntimeError("freesound adapter expected train_curated.csv")
+
+    train_df = pd.read_csv(train_csv)
+    keep_df, val_df = _split_df_basic(train_df, "freesound-audio-tagging-2019", visible_output)
+    keep_df.to_csv(train_csv, index=False)
+    val_df[["fname"]].to_csv(validation_dir / "validation.csv", index=False)
+
+    sample_template_df, _ = _load_sample_submission_template(visible_output, "freesound-audio-tagging-2019")
+    class_names = [col for col in sample_template_df.columns if col != "fname"]
+    answer_rows = []
+    for _, row in val_df.iterrows():
+        labels = {label.strip() for label in str(row["labels"]).split(",") if label.strip()}
+        answer_rows.append({"fname": row["fname"], **{name: int(name in labels) for name in class_names}})
+    answers_df = pd.DataFrame(answer_rows)
+    answers_df.to_csv(hidden_answers_path, index=False)
+    sample_df = answers_df.copy()
+    sample_df.loc[:, class_names] = 0.0
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+
+    _split_asset_dir_with_ids(
+        visible_output / "train_curated",
+        visible_output / "train_curated",
+        validation_dir / "validation_audio",
+        [str(v) for v in keep_df["fname"].tolist()],
+        [str(v) for v in val_df["fname"].tolist()],
+        [""],
+    )
+    return {
+        "authoritative_train_sources": [str(visible_output / "train_curated.csv"), str(visible_output / "train_curated"), str(visible_output / "train_noisy.csv"), str(visible_output / "train_noisy")],
+        "authoritative_validation_sources": ["validation/validation.csv"],
+        "hidden_answer_granularity": "direct",
+    }
+
+
+def _prepare_tensorflow_qa_second_split(
+    visible_output,
+    validation_dir,
+    hidden_answers_path,
+    hidden_sample_submission_path,
+    visible_sample_submission_path,
+):
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    train_path = visible_output / "simplified-nq-train.jsonl"
+    train_df = pd.read_json(train_path, orient="records", lines=True)
+    train_df["example_id"] = train_df["example_id"].astype(str)
+    keep_df, val_df = train_test_split(train_df, test_size=0.1, random_state=0)
+
+    keep_df.to_json(train_path, orient="records", lines=True)
+    keys_to_keep = ["example_id", "question_text", "document_text", "long_answer_candidates"]
+    val_df[keys_to_keep].to_json(validation_dir / "validation.jsonl", orient="records", lines=True)
+
+    gold_rows = []
+    for _, sample in val_df[["example_id", "annotations"]].iterrows():
+        annotation = sample["annotations"][0]
+        if annotation["yes_no_answer"] != "NONE":
+            short_answer = annotation["yes_no_answer"]
+        elif len(annotation["short_answers"]) > 0:
+            first_short = annotation["short_answers"][0]
+            short_answer = f"{first_short['start_token']}:{first_short['end_token']}"
+        else:
+            short_answer = ""
+        long = annotation["long_answer"]
+        long_answer = f"{long['start_token']}:{long['end_token']}" if long["start_token"] != -1 else ""
+        gold_rows.append({"example_id": f"{sample['example_id']}_short", "PredictionString": short_answer})
+        gold_rows.append({"example_id": f"{sample['example_id']}_long", "PredictionString": long_answer})
+
+    answers_df = pd.DataFrame(gold_rows)
+    answers_df.to_csv(hidden_answers_path, index=False)
+    sample_df = answers_df.copy()
+    sample_df["PredictionString"] = ""
+    sample_df.to_csv(hidden_sample_submission_path, index=False)
+    sample_df.to_csv(visible_sample_submission_path, index=False)
+    pd.DataFrame({"example_id": val_df["example_id"]}).to_csv(validation_dir / "validation.csv", index=False)
+    return {
+        "authoritative_train_sources": [str(train_path)],
+        "authoritative_validation_sources": ["validation/validation.csv", "validation/validation.jsonl"],
         "hidden_answer_granularity": "direct",
     }
 
@@ -877,12 +1887,50 @@ def _prepare_second_split_hidden_validation_artifacts(
 ) -> dict[str, Any]:
     if competition_id == "denoising-dirty-documents":
         return _prepare_denoising_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "multi-modal-gesture-recognition":
+        return _prepare_multimodal_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "billion-word-imputation":
+        return _prepare_billion_word_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "whale-categorization-playground":
+        return _prepare_whale_categorization_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "dogs-vs-cats-redux-kernels-edition":
         return _prepare_dogs_vs_cats_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "freesound-audio-tagging-2019":
+        return _prepare_freesound_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "random-acts-of-pizza":
         return _prepare_random_pizza_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "detecting-insults-in-social-commentary":
         return _prepare_detecting_insults_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "ventilator-pressure-prediction":
+        return _prepare_ventilator_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "champs-scalar-coupling":
+        return _prepare_champs_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "osic-pulmonary-fibrosis-progression":
+        return _prepare_osic_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "hotel-id-2021-fgvc8":
+        return _prepare_hotel_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "stanford-covid-vaccine":
+        return _prepare_stanford_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "tensorflow2-question-answering":
+        return _prepare_tensorflow_qa_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "bms-molecular-translation":
+        return _prepare_bms_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "h-and-m-personalized-fashion-recommendations":
+        return _prepare_h_and_m_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "cassava-leaf-disease-classification":
+        return _prepare_cassava_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "hms-harmful-brain-activity-classification":
+        return _prepare_hms_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "smartphone-decimeter-2022":
+        return _prepare_smartphone_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "nfl-player-contact-detection":
+        return _prepare_nfl_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "kuzushiji-recognition":
+        return _prepare_kuzushiji_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "hubmap-kidney-segmentation":
+        return _prepare_hubmap_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
+    if competition_id == "uw-madison-gi-tract-image-segmentation":
+        return _prepare_uw_second_split(visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id in {"text-normalization-challenge-english-language", "text-normalization-challenge-russian-language"}:
         return _prepare_text_normalization_second_split(competition_id, visible_output, validation_dir, hidden_answers_path, hidden_sample_submission_path, visible_sample_submission_path)
     if competition_id == "the-icml-2013-whale-challenge-right-whale-redux":
@@ -894,8 +1942,7 @@ def _prepare_second_split_hidden_validation_artifacts(
 
 def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
     competition_id = str(getattr(getattr(cfg, "hidden_validation", None), "competition_name", "")).strip() or infer_competition_id(cfg)
-    lite_ids = load_mlebench_lite_competition_ids()
-    if competition_id not in lite_ids:
+    if competition_id not in supported_deterministic_competition_ids():
         return None
 
     try:
