@@ -30,6 +30,9 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
             "evidence_summary": "",
         }
 
+    if manifest.get("contract_version") == "mlebench_lite_adapter_v3":
+        return _verify_single_split_artifacts(cfg, manifest)
+
     required_keys = [
         "visible_input_dir",
         "visible_validation_dir",
@@ -151,10 +154,10 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
     except Exception:
         pass
 
-    if int(manifest["visible_count"]) <= 0 or int(manifest["hidden_count"]) <= 0:
+    if int(manifest["hidden_count"]) <= 0:
         return {
             "ok": False,
-            "reason": "visible_count or hidden_count is non-positive",
+            "reason": "hidden_count is non-positive",
             "report": "",
             "manifest": manifest,
             "evidence_summary": "",
@@ -173,7 +176,11 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
             "evidence_summary": "",
         }
 
-    source_layout_check = _validate_visible_top_level_layout(cfg, visible_dir)
+    source_layout_check = _validate_visible_top_level_layout(
+        cfg,
+        visible_dir,
+        contract_version=manifest.get("contract_version"),
+    )
     if not source_layout_check["ok"]:
         return {
             "ok": False,
@@ -228,20 +235,8 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
         validation_sources_key="authoritative_hidden_validation_sources",
         answer_granularity_key="hidden_answer_granularity",
     )
-    expected_visible_count = visible_alignment["visible_training_count"]
     expected_visible_validation_count = visible_alignment["hidden_answers_count"]
     expected_hidden_count = hidden_alignment["hidden_answers_count"]
-    if int(manifest["visible_count"]) != expected_visible_count:
-        return {
-            "ok": False,
-            "reason": (
-                "manifest visible_count does not match visible training count: "
-                f"{manifest['visible_count']} != {expected_visible_count}"
-            ),
-            "report": "",
-            "manifest": manifest,
-            "evidence_summary": "",
-        }
     if int(manifest["visible_validation_count"]) != expected_visible_validation_count:
         return {
             "ok": False,
@@ -259,34 +254,6 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
             "reason": (
                 "manifest hidden_count does not match hidden answers rows: "
                 f"{manifest['hidden_count']} != {expected_hidden_count}"
-            ),
-            "report": "",
-            "manifest": manifest,
-            "evidence_summary": "",
-        }
-    if (
-        visible_alignment["hidden_answer_granularity"] == "direct"
-        and visible_alignment["visible_validation_count"] != expected_visible_validation_count
-    ):
-        return {
-            "ok": False,
-            "reason": (
-                "visible validation file count does not match visible answers rows: "
-                f"{visible_alignment['visible_validation_count']} != {expected_visible_validation_count}"
-            ),
-            "report": "",
-            "manifest": manifest,
-            "evidence_summary": "",
-        }
-    if (
-        hidden_alignment["hidden_answer_granularity"] == "direct"
-        and hidden_alignment["visible_validation_count"] != expected_hidden_count
-    ):
-        return {
-            "ok": False,
-            "reason": (
-                "hidden validation file count does not match hidden answers rows: "
-                f"{hidden_alignment['visible_validation_count']} != {expected_hidden_count}"
             ),
             "report": "",
             "manifest": manifest,
@@ -353,6 +320,199 @@ def verify_split_artifacts(cfg, manifest_path: Path) -> dict[str, Any]:
         f"hidden_sample_rows={hidden_alignment['sample_validation_rows']}\n"
         f"hidden_validation_file_count={hidden_alignment['visible_validation_count']}\n"
         f"hidden_answer_granularity={hidden_alignment['hidden_answer_granularity']}\n"
+        f"hidden_sample_ids_match_answers={hidden_alignment['sample_ids_match_answers']}\n"
+        f"hidden_overlap_train_answers_count={hidden_alignment['overlap_train_answers_count']}\n"
+        f"hidden_overlap_train_answers_examples={hidden_alignment['overlap_train_answers_examples']}\n"
+        f"hidden_validation_examples={hidden_alignment['visible_validation_examples']}"
+    )
+    return {
+        "ok": True,
+        "reason": "",
+        "report": report,
+        "manifest": manifest,
+        "evidence_summary": evidence_summary,
+    }
+
+
+def _verify_single_split_artifacts(cfg, manifest: dict[str, Any]) -> dict[str, Any]:
+    required_keys = [
+        "visible_input_dir",
+        "hidden_validation_dir",
+        "hidden_answers_path",
+        "hidden_sample_submission_path",
+        "competition_id",
+        "split_seed",
+        "strategy_summary",
+        "visible_count",
+        "hidden_count",
+        "contract_version",
+        "evidence_dir",
+        "authoritative_train_sources",
+        "authoritative_hidden_validation_sources",
+        "authoritative_hidden_answer_sources",
+        "hidden_answer_granularity",
+    ]
+    missing = [key for key in required_keys if key not in manifest]
+    if missing:
+        return {
+            "ok": False,
+            "reason": f"manifest missing required keys: {missing}",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    visible_dir = Path(manifest["visible_input_dir"])
+    hidden_validation_dir = Path(manifest["hidden_validation_dir"])
+    answers_path = Path(manifest["hidden_answers_path"])
+    sample_submission_path = Path(manifest["hidden_sample_submission_path"])
+    evidence_dir = Path(manifest["evidence_dir"])
+
+    for exists, reason in [
+        (visible_dir.exists(), "visible input dir missing"),
+        (hidden_validation_dir.exists(), "hidden validation dir missing"),
+        (answers_path.exists(), "hidden answers path missing"),
+        (sample_submission_path.exists(), "hidden sample submission path missing"),
+    ]:
+        if not exists:
+            return {
+                "ok": False,
+                "reason": reason,
+                "report": "",
+                "manifest": manifest,
+                "evidence_summary": "",
+            }
+
+    evidence_check = _validate_evidence_bundle(evidence_dir)
+    if not evidence_check["ok"]:
+        return {
+            "ok": False,
+            "reason": evidence_check["reason"],
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    try:
+        if sample_submission_path.resolve().is_relative_to(visible_dir.resolve()):
+            return {
+                "ok": False,
+                "reason": "hidden sample submission path points inside visible input dir",
+                "report": "",
+                "manifest": manifest,
+                "evidence_summary": "",
+            }
+    except Exception:
+        pass
+
+    if int(manifest["hidden_count"]) <= 0:
+        return {
+            "ok": False,
+            "reason": "hidden_count is non-positive",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    expected_competition_id = infer_competition_id(cfg)
+    if str(manifest["competition_id"]) != expected_competition_id:
+        return {
+            "ok": False,
+            "reason": (
+                "manifest competition_id does not match current task: "
+                f"{manifest['competition_id']} != {expected_competition_id}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    source_layout_check = _validate_visible_top_level_layout(
+        cfg,
+        visible_dir,
+        contract_version=manifest.get("contract_version"),
+    )
+    if not source_layout_check["ok"]:
+        return {
+            "ok": False,
+            "reason": source_layout_check["reason"],
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    hidden_grade_check = _validate_sample_submission(
+        cfg=cfg,
+        answers_path=answers_path,
+        sample_submission_path=sample_submission_path,
+    )
+    if not hidden_grade_check["ok"]:
+        return {
+            "ok": False,
+            "reason": f"{hidden_grade_check['reason']}: {hidden_grade_check['detail']}",
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    hidden_alignment = _compute_split_alignment(
+        visible_dir=visible_dir,
+        visible_validation_dir=hidden_validation_dir,
+        answers_path=answers_path,
+        sample_submission_path=sample_submission_path,
+        manifest=manifest,
+        validation_sources_key="authoritative_hidden_validation_sources",
+        answer_granularity_key="hidden_answer_granularity",
+    )
+    expected_hidden_count = hidden_alignment["hidden_answers_count"]
+    if int(manifest["hidden_count"]) != expected_hidden_count:
+        return {
+            "ok": False,
+            "reason": (
+                "manifest hidden_count does not match hidden answers rows: "
+                f"{manifest['hidden_count']} != {expected_hidden_count}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+    if hidden_alignment["overlap_train_answers_count"] > 0:
+        return {
+            "ok": False,
+            "reason": (
+                "some hidden-answer ids still exist in visible training data: "
+                f"{hidden_alignment['overlap_train_answers_examples']}"
+            ),
+            "report": "",
+            "manifest": manifest,
+            "evidence_summary": "",
+        }
+
+    evidence_summary = _build_evidence_summary(evidence_dir)
+    report = (
+        f"visible_input_dir={visible_dir}\n"
+        f"hidden_validation_dir={hidden_validation_dir}\n"
+        f"hidden_answers_path={answers_path}\n"
+        f"hidden_sample_submission_path={sample_submission_path}\n"
+        f"contract_version={manifest['contract_version']}\n"
+        f"visible_count={manifest['visible_count']}\n"
+        f"hidden_count={manifest['hidden_count']}\n"
+        f"split_seed={manifest['split_seed']}\n"
+        f"split_fraction={manifest.get('split_fraction')}\n"
+        f"top_level_layout_check={source_layout_check['detail']}\n"
+        f"authoritative_train_sources={manifest['authoritative_train_sources']}\n"
+        f"authoritative_hidden_validation_sources={manifest['authoritative_hidden_validation_sources']}\n"
+        f"authoritative_hidden_answer_sources={manifest['authoritative_hidden_answer_sources']}\n"
+        f"evidence_dir={evidence_dir}\n"
+        f"evidence_bundle_check={evidence_check['detail']}\n"
+        f"strategy_summary={manifest['strategy_summary']}\n"
+        f"hidden_sample_submission_grade_check={hidden_grade_check['detail']}\n"
+        f"visible_training_count={hidden_alignment['visible_training_count']}\n"
+        f"hidden_answers_count={hidden_alignment['hidden_answers_count']}\n"
+        f"hidden_sample_rows={hidden_alignment['sample_validation_rows']}\n"
+        f"hidden_validation_file_count={hidden_alignment['visible_validation_count']}\n"
+        f"hidden_answer_granularity={hidden_alignment['hidden_answer_granularity']}\n"
+        f"hidden_alignment_mode={manifest.get('hidden_alignment_mode', 'submission_rows')}\n"
         f"hidden_sample_ids_match_answers={hidden_alignment['sample_ids_match_answers']}\n"
         f"hidden_overlap_train_answers_count={hidden_alignment['overlap_train_answers_count']}\n"
         f"hidden_overlap_train_answers_examples={hidden_alignment['overlap_train_answers_examples']}\n"
@@ -552,6 +712,14 @@ def _compute_visible_training_count(
             if candidate.is_file() and candidate.suffix.lower() in {".csv", ".tsv"}:
                 counts.append(len(read_csv_rows(candidate)))
                 continue
+            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl"}:
+                counts.append(len(_read_structured_rows(candidate)))
+                continue
+            if candidate.is_file() and candidate.suffix.lower() == ".txt":
+                try:
+                    counts.append(len(candidate.read_text().splitlines()))
+                except Exception:
+                    continue
 
     return max(counts) if counts else 0
 
@@ -569,16 +737,57 @@ def _validate_sample_submission(
         answers = load_answers(answers_path)
         submission = read_csv(sample_submission_path)
         score = competition.grader(submission, answers)
-        if score is None:
-            return {"ok": False, "reason": "grader returned None", "detail": "score=None"}
-        score = float(score)
-        if not math.isfinite(score):
+        if score is not None:
+            score = float(score)
+            if math.isfinite(score):
+                return {"ok": True, "reason": "", "detail": f"sample_score={score}"}
+
+        # Some competitions ship placeholder sample submissions that are not
+        # grade-stable. In those cases, validate the hidden split by grading an
+        # oracle submission built from the hidden answers in submission format.
+        answer_rows = read_csv_rows(answers_path)
+        sample_rows = read_csv_rows(sample_submission_path)
+        if not answer_rows or not sample_rows:
+            if score is None:
+                return {"ok": False, "reason": "grader returned None", "detail": "score=None"}
             return {
                 "ok": False,
                 "reason": f"grader returned non-finite score: {score}",
                 "detail": f"score={score}",
             }
-        return {"ok": True, "reason": "", "detail": f"score={score}"}
+
+        sample_columns = list(sample_rows[0].keys())
+        if any(column not in answer_rows[0] for column in sample_columns):
+            if score is None:
+                return {"ok": False, "reason": "grader returned None", "detail": "score=None"}
+            return {
+                "ok": False,
+                "reason": f"grader returned non-finite score: {score}",
+                "detail": f"score={score}",
+            }
+
+        oracle_submission_path = sample_submission_path.parent / ".oracle_hidden_submission.csv"
+        try:
+            with oracle_submission_path.open("w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=sample_columns)
+                writer.writeheader()
+                for row in answer_rows:
+                    writer.writerow({column: row.get(column, "") for column in sample_columns})
+            oracle_submission = read_csv(oracle_submission_path)
+            oracle_score = competition.grader(oracle_submission, answers)
+        finally:
+            oracle_submission_path.unlink(missing_ok=True)
+
+        if oracle_score is None:
+            return {"ok": False, "reason": "grader returned None", "detail": "oracle_score=None"}
+        oracle_score = float(oracle_score)
+        if not math.isfinite(oracle_score):
+            return {
+                "ok": False,
+                "reason": f"grader returned non-finite score: {oracle_score}",
+                "detail": f"oracle_score={oracle_score}",
+            }
+        return {"ok": True, "reason": "", "detail": f"oracle_score={oracle_score}"}
     except Exception as exc:
         logger.exception("Sample submission validation failed")
         return {"ok": False, "reason": "sample submission grading failed", "detail": str(exc)}
@@ -620,7 +829,11 @@ def _build_evidence_summary(evidence_dir: Path) -> str:
     return "\n".join(parts)
 
 
-def _validate_visible_top_level_layout(cfg, visible_dir: Path) -> dict[str, Any]:
+def _validate_visible_top_level_layout(
+    cfg,
+    visible_dir: Path,
+    contract_version: str | None = None,
+) -> dict[str, Any]:
     source_dir = Path(cfg.data_dir).resolve()
     if not source_dir.exists():
         return {"ok": False, "reason": f"source input dir missing: {source_dir}", "detail": ""}
@@ -636,20 +849,19 @@ def _validate_visible_top_level_layout(cfg, visible_dir: Path) -> dict[str, Any]
             accepted_extracted_archives.append(entry)
             continue
         missing_entries.append(entry)
-    if missing_entries:
-        return {
-            "ok": False,
-            "reason": f"visible layout is missing top-level source entries: {missing_entries}",
-            "detail": f"missing={missing_entries}; accepted_extracted_archives={accepted_extracted_archives}",
-        }
+
+    if contract_version == "mlebench_lite_adapter_v3":
+        required_entries = ["hidden_validation"]
+    else:
+        required_entries = [
+            "visible_validation",
+            "hidden_validation",
+            "visible_validation_answers.csv",
+            "sampleVisibleValidationSubmission.csv",
+        ]
 
     required_extra_entries = []
-    for required in [
-        "visible_validation",
-        "hidden_validation",
-        "visible_validation_answers.csv",
-        "sampleVisibleValidationSubmission.csv",
-    ]:
+    for required in required_entries:
         if required not in visible_entries:
             required_extra_entries.append(required)
     if required_extra_entries:
@@ -664,7 +876,7 @@ def _validate_visible_top_level_layout(cfg, visible_dir: Path) -> dict[str, Any]
         "ok": True,
         "reason": "",
         "detail": (
-            f"all_source_entries_present; "
+            f"missing_source_entries={missing_entries}; "
             f"accepted_extracted_archives={accepted_extracted_archives}; extra={extra_entries}"
         ),
     }

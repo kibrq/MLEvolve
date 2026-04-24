@@ -336,7 +336,7 @@ class MetaAgent:
             "- Remove duplicate imports and definitions",
             "- Ensure the execution flow is logical: data processing & feature engineering -> model design -> training & evaluation",
             "- Make sure the final code prints validation metric (must match task's Evaluation section) and saves `submission.csv`",
-            "- If hidden validation mode is active in the task description, also save `submission_visible.csv` and `submission_hidden.csv` using the same submission schema style",
+            "- If hidden validation mode is active in the task description, also save `submission_hidden.csv` using the same submission schema style",
             "- The code should be a single-file Python program that can be executed as-is",
             "- Assume previous steps have NOT been executed; do not skip execution steps and only read files or outputs.",
             "- All parts must work together seamlessly",
@@ -432,7 +432,7 @@ def create_default_step_agents() -> List[StepAgent]:
             introduction="You are a Training and Evaluation Expert responsible for implementing training, validation, and submission generation.",
             description="Implement the training loop, validation, metric tracking, model saving, and generate submission file.",
             guidelines=[
-                "Your responsibility: Write the training loop that uses the data, features, model, loss function, and optimizer from previous steps. Include validation, metric tracking, save the best model. Then load the best model, calculate validation metric (must match task's Evaluation section), perform test inference, and save `submission.csv` to `./submission/` directory. If hidden validation mode is active in the task description, also run inference on `./input/visible_validation` and `./input/hidden_validation`, then save `submission_visible.csv` and `submission_hidden.csv` to `./submission/` using the same submission schema style.",
+                "Your responsibility: Write the training loop that uses the data, features, model, loss function, and optimizer from previous steps. Include validation, metric tracking, save the best model. Then load the best model, calculate a self-reported validation metric from train-derived data (must match task's Evaluation section), perform test inference, and save `submission.csv` to `./submission/` directory. If hidden validation mode is active in the task description, also run inference on `./input/hidden_validation`, then save `submission_hidden.csv` to `./submission/` using the same submission schema style. Do not use hidden validation for early stopping or model selection.",
                 "CRITICAL: Assume that all previous code steps have already been executed. You should start directly from the training step. Do NOT redefine or reload the data, features, model, loss function, or optimizer. These components are already defined and available from the previous steps.",
                 "IMPORTANT: Your code should assume the data preprocessing, feature engineering, and model design steps have been completed. Simply use the existing variables without copying them.",
                 "CRITICAL: Validation metric computation must use the same prediction method as test inference, using training data only as reference, to avoid data leakage and ensure the metric reflects true generalization performance.",

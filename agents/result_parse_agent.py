@@ -305,21 +305,21 @@ def _mark_content_quality_failure(node: SearchNode, content_error):
     node.analysis = f"CONTENT_QUALITY_ERROR: This previous solution runs without bugs and has correct format, but failed content quality check.\n\nDetails:\n{content_error}"
 
 
-def _mark_visible_validation_failure(node: SearchNode, validation_failure_reason: str):
+def _mark_hidden_validation_failure(node: SearchNode, validation_failure_reason: str):
     hidden_error_message = (
-        "Visible validation grading FAILED.\n\n"
+        "Hidden validation grading FAILED.\n\n"
         f"{validation_failure_reason}\n\n"
-        "The visible validation submission did not satisfy the evaluator contract. "
+        "The hidden validation submission did not satisfy the evaluator contract. "
         "Assume the validator is correct. Do NOT argue with it or work around it. "
-        "Inspect how `submission_visible.csv` is generated and re-check it against the "
+        "Inspect how `submission_hidden.csv` is generated and re-check it against the "
         "sample submission / evaluator contract for the expected schema, row count, ids, ordering, "
-        "and prediction granularity for the visible validation split."
+        "and prediction granularity for the hidden validation split."
     )
     node.is_valid = False
     node.is_buggy = True
     node._term_out.append(f"\n{hidden_error_message}")
     node.analysis = (
-        "VISIBLE_VALIDATION_ERROR: Execution succeeded but the visible validation submission "
+        "HIDDEN_VALIDATION_ERROR: Execution succeeded but the hidden validation submission "
         "failed grading.\n\n"
         f"Details:\n{validation_failure_reason}"
     )
@@ -445,7 +445,6 @@ def run(
                 node.self_reported_metric = float(metric_val)
 
             has_csv_submission = _check_submission_file(agent, node)
-            visible_metric_report = (validation_metric_report or {}).get("visible")
             hidden_metric_report = (validation_metric_report or {}).get("hidden")
 
             node.analysis = response["summary"]
@@ -454,15 +453,15 @@ def run(
                 node,
                 response,
                 has_csv_submission,
-                require_reported_metric=not (visible_metric_report and visible_metric_report.get("valid")),
+                require_reported_metric=True,
             )
             if (
-                visible_metric_report is not None
-                and not visible_metric_report.get("valid", False)
+                hidden_metric_report is not None
+                and not hidden_metric_report.get("valid", False)
             ):
-                _mark_visible_validation_failure(
+                _mark_hidden_validation_failure(
                     node,
-                    visible_metric_report.get("reason", "visible validation scoring failed"),
+                    hidden_metric_report.get("reason", "hidden validation scoring failed"),
                 )
 
             if not node.is_buggy:
@@ -478,20 +477,13 @@ def run(
             else:
                 if hidden_metric_report and hidden_metric_report.get("valid"):
                     node.hidden_metric = float(hidden_metric_report["score"])
-                if visible_metric_report and visible_metric_report.get("valid"):
-                    node.metric = MetricValue(
-                        visible_metric_report["score"],
-                        maximize=not visible_metric_report["lower_is_better"],
-                    )
-                    node.metric_source = "visible_search_val"
-                else:
-                    _validate_metric_direction(agent, node, response)
-                    node.metric_source = node.metric_source or (
-                        "self_reported_fallback"
-                        if getattr(agent, "hidden_validation_state", {}).get("fallback_mode")
-                        else "self_reported"
-                    )
-                    _check_data_leakage(agent, node, response)
+                _validate_metric_direction(agent, node, response)
+                node.metric_source = node.metric_source or (
+                    "self_reported_fallback"
+                    if getattr(agent, "hidden_validation_state", {}).get("fallback_mode")
+                    else "self_reported"
+                )
+                _check_data_leakage(agent, node, response)
 
             status = "FAIL" if node.is_buggy else "PASS"
             metric_val = node.metric.value if node.metric else None

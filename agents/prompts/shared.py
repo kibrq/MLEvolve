@@ -11,7 +11,7 @@ ROBUSTNESS_GENERALIZATION_STRATEGY = {
         "✅ **Loss Function**: Inspect class distribution and adapt loss accordingly (e.g., weighted loss, FocalLoss, or task-specific objectives)",
         "✅ **Learning Rate**: Consider using adaptive schedules like Cosine Annealing or ReduceLROnPlateau or Warmup with differential rates if needed",
         "✅ **Data Augmentation**: Apply domain-appropriate augmentation based on data modality (e.g., geometric transforms, masking, mixup)",
-        "✅ **Validation**: Monitor validation metrics strictly and use early stopping to prevent overfitting. If the workspace already provides an explicit validation split, use that as the external evaluation target; any additional split must stay inside the training data only.",
+        "✅ **Validation**: Monitor validation metrics strictly and use early stopping only on train-derived validation data. If hidden validation mode is active, treat `./input/hidden_validation` as inference-only and never use it for early stopping or model selection.",
         "",
         "⚠️ **Note**:",
         "Prioritize capturing the intrinsic structure of the data (Inductive Bias) over simply increasing model size.",

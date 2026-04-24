@@ -117,6 +117,8 @@ class ColdstartConfig:
 class HiddenValidationConfig:
     enabled: bool = True
     competition_name: str = ""
+    split_fraction: float = 0.10
+    unsupported_policy: str = "disable"
     allow_self_report_fallback: bool = True
     hard_fail_on_prepare_error: bool = False
     stop_after_prepare: bool = False

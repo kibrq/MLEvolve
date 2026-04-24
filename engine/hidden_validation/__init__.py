@@ -49,12 +49,18 @@ def prepare_hidden_validation(cfg) -> dict[str, Any]:
 
     state = default_state()
     state["enabled"] = True
-    fallback_reason = (
-        "Deterministic hidden-validation adapter is only supported for mle-bench lite competitions. "
-        f"Competition '{competition_id}' will use self-reported metrics instead."
+    unsupported_reason = (
+        "Deterministic hidden-validation adapter does not have a recipe for "
+        f"competition '{competition_id}'."
     )
-    if cfg.hidden_validation.allow_self_report_fallback:
-        return activate_fallback(cfg, state, reason=fallback_reason)
+    policy = str(getattr(cfg.hidden_validation, "unsupported_policy", "disable")).strip().lower()
+    if policy == "error":
+        raise RuntimeError(unsupported_reason)
+    if policy == "fallback" and cfg.hidden_validation.allow_self_report_fallback:
+        return activate_fallback(cfg, state, reason=unsupported_reason)
+    state["fallback_reason"] = unsupported_reason
+    state["reviewer_status"] = "unsupported_competition"
+    logger.info("Hidden validation disabled: %s", unsupported_reason)
     return save_runtime_state(cfg, state)
 
 
@@ -122,15 +128,6 @@ def score_validation_execution(
     metric_maximize: bool | None = None,
 ) -> dict[str, Any]:
     return {
-        "visible": _score_submission(
-            cfg=cfg,
-            state=state,
-            submission_filename=f"submission_visible_{node_id}.csv",
-            answers_path_key="visible_answers_path",
-            node_id=node_id,
-            exec_result=exec_result,
-            metric_maximize=metric_maximize,
-        ),
         "hidden": _score_submission(
             cfg=cfg,
             state=state,

@@ -135,14 +135,15 @@ class AgentSearch:
             hidden_validation_note = """
 
         ⚠️  HIDDEN VALIDATION MODE:
-        - `./input` preserves the original public layout and also contains `./input/visible_validation`, `./input/hidden_validation`, and `./input/visible_validation_answers.csv`
-        - Use `./input/visible_validation_answers.csv` only to compute and print the visible validation score during development
-        - Treat `./input/visible_validation` and `./input/hidden_validation` as separate inference targets; do not merge either split into training
-        - Write ALL THREE files:
+        - `./input` preserves the original public layout and also contains `./input/hidden_validation`
+        - `./input/hidden_validation` is a HIDDEN inference-only split; its answers are NOT available to you
+        - Do NOT use hidden validation for early stopping, model selection, tuning, or printed development metrics
+        - If you need a development metric, create your own train-only split from the remaining training data and self-report that score
+        - Treat `./input/hidden_validation` as a separate inference target; do not merge it into training
+        - Write BOTH files:
           1. `./submission/submission.csv` for the normal test-style output
-          2. `./submission/submission_visible.csv` for the visible validation split output
-          3. `./submission/submission_hidden.csv` for the hidden validation split output
-        - `submission_visible.csv` and `submission_hidden.csv` must use the same schema style as `submission.csv`
+          2. `./submission/submission_hidden.csv` for the hidden validation split output
+        - `submission_hidden.csv` must use the same schema style as `submission.csv`
         """
         self.data_preview = base_preview + submission_format_warning + hidden_validation_note
 

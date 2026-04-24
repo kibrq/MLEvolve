@@ -146,6 +146,8 @@ coldstart:
 hidden_validation:
   enabled: True
   competition_name: ""
+  split_fraction: 0.10
+  unsupported_policy: "disable"
   allow_self_report_fallback: True
   hard_fail_on_prepare_error: False
   stop_after_prepare: False

@@ -101,7 +101,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         "   • Complete model definition and training\n"
         "   • Complete validation metric calculation\n"
         "   • Complete test inference and `submission.csv` generation\n"
-        "   • If hidden validation mode is active in the task description, also generate `submission_visible.csv` and `submission_hidden.csv`\n"
+        "   • If hidden validation mode is active in the task description, also generate `submission_hidden.csv`\n"
         "   • Every line of code needed to run from beginning to end\n\n"
         "Your response format:\n"
         "1. A brief implementation outline (2-3 sentences) explaining the bugfix\n"

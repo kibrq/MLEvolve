@@ -81,12 +81,15 @@ def get_impl_guideline(
     ]
     if hidden_validation_active:
         impl_guideline[15:15] = [
-            "• Also write: `./submission/submission_visible.csv` and `./submission/submission_hidden.csv`",
-            "• Content: Model predictions on ALL provided samples under `./input/visible_validation` and `./input/hidden_validation`",
-            "• Format: Both must use the same schema style as `submission.csv`",
-            "• `./input/visible_validation` is the mandatory external evaluation target for the printed score",
+            "• Also write: `./submission/submission_hidden.csv`",
+            "• Content: Model predictions on ALL provided samples under `./input/hidden_validation`",
+            "• Format: It must use the same schema style as `submission.csv`",
+            "• `./input/hidden_validation` is a TEST-style inference split and may NOT have the same structure as the training data",
+            "• If a validation CSV is id-only or metadata-only, use the actual inference assets/files under that validation directory rather than assuming train-like feature columns exist",
+            "• The answers for `./input/hidden_validation` are HIDDEN and are not available to you",
+            "• You MUST self-report a score from your own train-only validation procedure, as in the plain regime",
             "• You MAY create an internal train-only split for early stopping or model selection, but ONLY from the remaining training data",
-            "• Do NOT create a replacement evaluation split when `./input/visible_validation` already exists, and never train on `./input/visible_validation` or `./input/hidden_validation`",
+            "• Do NOT use `./input/hidden_validation` for early stopping, model selection, tuning, or printed development metrics, and never train on it",
             "",
         ]
     if expose_prediction:
@@ -104,8 +107,8 @@ def get_impl_guideline(
     if hidden_validation_active:
         impl_guideline.extend(
             [
-                "□ Did I also generate submission_visible.csv and submission_hidden.csv in the correct path with ALL validation predictions?",
-                "□ Did visible and hidden validation inference reuse the same preprocessing and prediction logic as test inference?",
+                "□ Did I also generate submission_hidden.csv in the correct path with ALL hidden-validation predictions?",
+                "□ Did hidden validation inference reuse the same preprocessing and prediction logic as test inference?",
             ]
         )
 

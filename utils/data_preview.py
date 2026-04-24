@@ -181,24 +181,25 @@ def generate(base_path, include_file_details=True, simple=False):
 
         if has_validation:
             msg = []
-            if (input_dir / "visible_validation").exists() or (input_dir / "hidden_validation").exists():
+            if (input_dir / "hidden_validation").exists():
                 msg.append("\n**HIDDEN VALIDATION DATA CONTRACT - READ CAREFULLY**")
                 msg.append(
                     "\n"
-                    "This workspace contains two additional evaluation splits derived from the training data.\n"
-                    "- `./input/visible_validation` has a matching label file at `./input/visible_validation_answers.csv`\n"
+                    "This workspace contains one additional hidden evaluation split derived from the training data.\n"
                     "- `./input/hidden_validation` is unlabeled and must be treated like an extra test-style split\n"
-                    "Neither split may be merged back into training.\n"
+                    "- The answers for `./input/hidden_validation` are HIDDEN and are not available in the workspace\n"
+                    "- `./input/hidden_validation` should be treated like a TEST/TARGET inference input and may NOT have the same structure as the training data\n"
+                    "- In particular, some tasks expose only ids/metadata in validation CSVs and keep the real inference inputs in sibling assets such as images, audio, documents, or other files under the validation directory\n"
+                    "The hidden split may not be merged back into training.\n"
                     "\n"
                     "REQUIRED STEPS:\n"
                     "1. Train only on the reduced training data that remains in the normal training folders\n"
                     "2. You MAY create an internal train-only split for early stopping or model selection, but only from that remaining training data\n"
-                    "3. Do NOT create a replacement external validation split when `./input/visible_validation` already exists\n"
-                    "4. Run inference on the regular test-style split and save `./submission/submission.csv`\n"
-                    "5. Run inference on `./input/visible_validation` and save `./submission/submission_visible.csv`\n"
-                    "6. Run inference on `./input/hidden_validation` and save `./submission/submission_hidden.csv`\n"
-                    "7. Compute and print the visible validation score using `./input/visible_validation_answers.csv`\n"
-                    "8. Use the same submission schema for all three files\n"
+                    "3. Run inference on the regular test-style split and save `./submission/submission.csv`\n"
+                    "4. Run inference on `./input/hidden_validation` using whatever files/assets that split actually provides, and save `./submission/submission_hidden.csv`\n"
+                    "5. Self-report your development score using only a train-derived validation procedure\n"
+                    "6. Do NOT use hidden validation for early stopping, tuning, or printed development metrics\n"
+                    "7. Use the same submission schema for both files\n"
                 )
             else:
                 msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
@@ -306,9 +307,8 @@ def clean_task_desc(task_desc: str, cfg) -> str:
                 submission_format += "\n**Submission File Location**: Must save the submission to `./submission/submission.csv`\n."
                 if hidden_validation_active:
                     submission_format += (
-                        "\n**Hidden Validation Mode**: Also save `./submission/submission_visible.csv` "
-                        "for `./input/visible_validation` and `./submission/submission_hidden.csv` "
-                        "for `./input/hidden_validation`.\n"
+                        "\n**Hidden Validation Mode**: Also save `./submission/submission_hidden.csv` "
+                        "for `./input/hidden_validation`. Its answers are hidden and it is for inference only.\n"
                     )
 
                 cleaned_desc += submission_format

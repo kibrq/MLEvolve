@@ -143,6 +143,12 @@ SPECIAL_CASE_DETERMINISTIC_COMPETITIONS = {
     "whale-categorization-playground",
 }
 
+DEFAULT_SPLIT_FRACTION = 0.10
+
+
+def _configured_split_fraction() -> float:
+    return max(1e-6, min(0.5, float(DEFAULT_SPLIT_FRACTION)))
+
 
 def supported_deterministic_competition_ids() -> set[str]:
     return set(GENERIC_DATAFRAME_COMPETITION_CONFIGS) | set(
@@ -465,6 +471,7 @@ def _split_df_basic(df, competition_id: str, visible_output: Path):
     from sklearn.model_selection import train_test_split
 
     stratify = None
+    split_fraction = _configured_split_fraction()
     if competition_id == "aerial-cactus-identification":
         test_size = 0.19
     elif competition_id == "leaf-classification":
@@ -473,20 +480,22 @@ def _split_df_basic(df, competition_id: str, visible_output: Path):
         test_size = 0.2
         stratify = df["species"]
     elif competition_id == "new-york-city-taxi-fare-prediction":
-        test_size = min(9914, max(1, len(df) // 10))
+        test_size = min(9914, max(1, int(len(df) * split_fraction)))
     elif competition_id == "tabular-playground-series-may-2022":
-        test_size = min(100_000, max(1, len(df) // 10))
+        test_size = min(100_000, max(1, int(len(df) * split_fraction)))
     elif competition_id == "histopathologic-cancer-detection":
         existing_test = len(list((visible_output / "test").glob("*.tif")))
         test_size = max(1, min(len(df) - 1, existing_test))
     else:
-        test_size = 0.1
+        test_size = split_fraction
     return train_test_split(df, test_size=test_size, random_state=0, stratify=stratify)
 
 
-def _split_df_by_group(df, group_col: str, test_size: float = 0.1):
+def _split_df_by_group(df, group_col: str, test_size: float | None = None):
     from sklearn.model_selection import train_test_split
 
+    if test_size is None:
+        test_size = _configured_split_fraction()
     group_values = sorted(df[group_col].dropna().unique().tolist())
     keep_groups, validation_groups = train_test_split(
         group_values,
@@ -688,7 +697,7 @@ def _prepare_ventilator_second_split(
     import pandas as pd
 
     train_df = pd.read_csv(visible_output / "train.csv")
-    keep_df, val_df = _split_df_by_group(train_df, "breath_id", test_size=0.1)
+    keep_df, val_df = _split_df_by_group(train_df, "breath_id")
     keep_df = keep_df.copy()
     val_df = val_df.copy()
     keep_df["id"] = range(1, len(keep_df) + 1)
@@ -719,7 +728,7 @@ def _prepare_champs_second_split(
     import pandas as pd
 
     train_df = pd.read_csv(visible_output / "train.csv")
-    keep_df, val_df = _split_df_by_group(train_df, "molecule_name", test_size=0.1)
+    keep_df, val_df = _split_df_by_group(train_df, "molecule_name")
     keep_molecules = set(keep_df["molecule_name"])
 
     keep_df.to_csv(visible_output / "train.csv", index=False)
@@ -770,7 +779,7 @@ def _prepare_osic_second_split(
     import pandas as pd
 
     train_df = pd.read_csv(visible_output / "train.csv")
-    keep_df, val_df = _split_df_by_group(train_df, "Patient", test_size=0.1)
+    keep_df, val_df = _split_df_by_group(train_df, "Patient")
     keep_patients = set(keep_df["Patient"])
     val_patients = set(val_df["Patient"])
 
@@ -825,6 +834,7 @@ def _prepare_osic_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
         "authoritative_validation_sources": ["validation/validation_targets.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -874,6 +884,7 @@ def _prepare_hotel_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_images")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -889,7 +900,7 @@ def _prepare_stanford_second_split(
     train_df = pd.read_json(visible_output / "train.json", lines=True)
     test_template_df = pd.read_json(visible_output / "test.json", lines=True)
     to_predict = ["reactivity", "deg_Mg_pH10", "deg_pH10", "deg_Mg_50C", "deg_50C"]
-    n_test_samples = max(1, int(len(train_df) * 0.1))
+    n_test_samples = max(1, int(len(train_df) * _configured_split_fraction()))
     test_indices = train_df[train_df["SN_filter"] > 0].sample(n=n_test_samples, random_state=0).index
     keep_df = train_df.drop(index=test_indices).copy()
     val_df = train_df.loc[test_indices].copy()
@@ -938,6 +949,7 @@ def _prepare_stanford_second_split(
         "authoritative_train_sources": [str(visible_output / "train.json")],
         "authoritative_validation_sources": ["validation/validation.json"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1026,6 +1038,7 @@ def _prepare_h_and_m_second_split(
         "authoritative_train_sources": _collect_authoritative_train_sources(visible_output),
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1045,7 +1058,11 @@ def _prepare_cassava_second_split(
         for path in sorted((visible_output / "train_tfrecords").iterdir())
         if path.is_file() and path.suffix == ".tfrec"
     ]
-    keep_tfrec, val_tfrec = train_test_split(tfrecord_files, test_size=0.1, random_state=0)
+    keep_tfrec, val_tfrec = train_test_split(
+        tfrecord_files,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
     val_ids: list[str] = []
     for path in val_tfrec:
         val_ids.extend(get_ids_from_tf_records(path))
@@ -1085,6 +1102,7 @@ def _prepare_cassava_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_tfrecords"), str(visible_output / "train_images")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1098,7 +1116,7 @@ def _prepare_hms_second_split(
     import pandas as pd
 
     train_df = pd.read_csv(visible_output / "train.csv")
-    keep_df, val_df = _split_df_by_group(train_df, "spectrogram_id", test_size=0.1)
+    keep_df, val_df = _split_df_by_group(train_df, "spectrogram_id")
     sample_template_df, _ = _load_sample_submission_template(
         visible_output,
         "hms-harmful-brain-activity-classification",
@@ -1139,6 +1157,7 @@ def _prepare_hms_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_eegs"), str(visible_output / "train_spectrograms")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1158,7 +1177,11 @@ def _prepare_smartphone_second_split(
 
     train_ids = sorted([folder.name for folder in (visible_output / "train").glob("*") if folder.is_dir()])
     dates = sorted({_get_date(name) for name in train_ids})
-    keep_dates, val_dates = train_test_split(dates, test_size=0.1, random_state=0)
+    keep_dates, val_dates = train_test_split(
+        dates,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
     keep_ids = [name for name in train_ids if _get_date(name) in set(keep_dates)]
     val_ids = [name for name in train_ids if _get_date(name) in set(val_dates)]
 
@@ -1196,6 +1219,7 @@ def _prepare_smartphone_second_split(
         "authoritative_train_sources": [str(visible_output / "train")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1209,7 +1233,7 @@ def _prepare_nfl_second_split(
     import pandas as pd
 
     train_df = pd.read_csv(visible_output / "train_labels.csv")
-    keep_df, val_df = _split_df_by_group(train_df, "game_play", test_size=0.1)
+    keep_df, val_df = _split_df_by_group(train_df, "game_play")
     keep_game_plays = set(keep_df["game_play"])
     val_game_plays = set(val_df["game_play"])
 
@@ -1246,6 +1270,7 @@ def _prepare_nfl_second_split(
         "authoritative_train_sources": [str(visible_output / "train_labels.csv"), str(visible_output / "train")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1279,6 +1304,7 @@ def _prepare_kuzushiji_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train_images")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1322,6 +1348,7 @@ def _prepare_hubmap_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv"), str(visible_output / "train")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1340,7 +1367,11 @@ def _prepare_uw_second_split(
     train_df["day"] = train_df["id"].apply(lambda x: x.split("_")[1])
     train_df["slice"] = train_df["id"].apply(lambda x: x.split("_")[-1])
     unique_cases = train_df["case"].unique()
-    keep_cases, val_cases = train_test_split(unique_cases, test_size=0.1, random_state=42)
+    keep_cases, val_cases = train_test_split(
+        unique_cases,
+        test_size=_configured_split_fraction(),
+        random_state=42,
+    )
     train_df["set"] = train_df["case"].apply(lambda x: "validation" if x in set(val_cases) else "train")
     days_df = train_df[train_df["set"] == "train"].groupby("case")["day"].apply(set).reset_index()
     for _, row in days_df.iterrows():
@@ -1438,6 +1469,7 @@ def _prepare_multimodal_second_split(
         "authoritative_train_sources": [str(visible_output / "training.csv")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "asset_presence_only",
     }
 
 
@@ -1479,12 +1511,35 @@ def _prepare_billion_word_second_split(
     pd.DataFrame(answer_rows).to_csv(hidden_answers_path, index=False)
     validation_txt = validation_dir / "validation_v2.txt"
     validation_txt.write_text("\n".join(submission_lines) + ("\n" if submission_lines else ""))
-    hidden_sample_submission_path.write_text(validation_txt.read_text())
-    visible_sample_submission_path.write_text(validation_txt.read_text())
+    sample_submission_rows = visible_rows
+    if not answer_rows:
+        fallback_sentence = next(
+            (line.strip() for line in kept_lines if len(line.strip().split()) > 2),
+            None,
+        )
+        if fallback_sentence is None:
+            raise RuntimeError("billion-word adapter could not derive any hidden validation examples")
+        fallback_line = next(
+            (line for line in kept_lines if line.strip() == fallback_sentence),
+            None,
+        )
+        if fallback_line is not None:
+            kept_lines.remove(fallback_line)
+        words = fallback_sentence.split()
+        idx = max(1, len(words) // 2)
+        removed = " ".join(words[:idx] + words[idx + 1 :])
+        pd.DataFrame([{"id": 0, "sentence": removed}]).to_csv(validation_dir / "validation.csv", index=False)
+        pd.DataFrame([{"id": 0, "sentence": fallback_sentence}]).to_csv(hidden_answers_path, index=False)
+        validation_txt.write_text(removed + "\n")
+        train_path.write_text("".join(kept_lines))
+        sample_submission_rows = [{"id": 0, "sentence": removed}]
+    pd.DataFrame(sample_submission_rows).to_csv(hidden_sample_submission_path, index=False)
+    pd.DataFrame(sample_submission_rows).to_csv(visible_sample_submission_path, index=False)
     return {
         "authoritative_train_sources": [str(visible_output / "train_v2.txt")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1531,6 +1586,7 @@ def _prepare_freesound_second_split(
         "authoritative_train_sources": [str(visible_output / "train_curated.csv"), str(visible_output / "train_curated"), str(visible_output / "train_noisy.csv"), str(visible_output / "train_noisy")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1547,7 +1603,11 @@ def _prepare_tensorflow_qa_second_split(
     train_path = visible_output / "simplified-nq-train.jsonl"
     train_df = pd.read_json(train_path, orient="records", lines=True)
     train_df["example_id"] = train_df["example_id"].astype(str)
-    keep_df, val_df = train_test_split(train_df, test_size=0.1, random_state=0)
+    keep_df, val_df = train_test_split(
+        train_df,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
 
     keep_df.to_json(train_path, orient="records", lines=True)
     keys_to_keep = ["example_id", "question_text", "document_text", "long_answer_candidates"]
@@ -1579,6 +1639,7 @@ def _prepare_tensorflow_qa_second_split(
         "authoritative_train_sources": [str(train_path)],
         "authoritative_validation_sources": ["validation/validation.csv", "validation/validation.jsonl"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1589,7 +1650,11 @@ def _prepare_denoising_second_split(visible_output, validation_dir, hidden_answe
     from sklearn.model_selection import train_test_split
 
     train_ids = sorted(path.stem for path in (visible_output / "train").glob("*.png"))
-    keep_ids, val_ids = train_test_split(train_ids, test_size=0.1, random_state=0)
+    keep_ids, val_ids = train_test_split(
+        train_ids,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
     train_cleaned_backup = visible_output / ".train_cleaned_hidden_validation_answers_source"
     if train_cleaned_backup.exists():
         shutil.rmtree(train_cleaned_backup)
@@ -1622,6 +1687,7 @@ def _prepare_denoising_second_split(visible_output, validation_dir, hidden_answe
         "authoritative_train_sources": [str(visible_output / "train"), str(visible_output / "train_cleaned")],
         "authoritative_validation_sources": ["validation"],
         "hidden_answer_granularity": "derived",
+        "hidden_alignment_mode": "asset_presence_only",
     }
 
 
@@ -1630,7 +1696,11 @@ def _prepare_dogs_vs_cats_second_split(visible_output, validation_dir, hidden_an
     from sklearn.model_selection import train_test_split
 
     train_files = sorted((visible_output / "train").glob("*.jpg"))
-    keep_files, val_files = train_test_split(train_files, test_size=0.1, random_state=0)
+    keep_files, val_files = train_test_split(
+        train_files,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
     backup = visible_output / ".train_hidden_validation_source"
     if backup.exists():
         shutil.rmtree(backup)
@@ -1655,6 +1725,7 @@ def _prepare_dogs_vs_cats_second_split(visible_output, validation_dir, hidden_an
         "authoritative_train_sources": [str(visible_output / "train")],
         "authoritative_validation_sources": ["validation", "validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1691,6 +1762,7 @@ def _prepare_random_pizza_second_split(visible_output, validation_dir, hidden_an
         "authoritative_train_sources": [manifest_path, str(visible_output / "train.json")],
         "authoritative_validation_sources": ["validation/validation.json", "validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1707,7 +1779,7 @@ def _prepare_detecting_insults_second_split(
     train_df = pd.read_csv(visible_output / "train.csv")
     keep_df, val_df = train_test_split(
         train_df,
-        test_size=0.1,
+        test_size=_configured_split_fraction(),
         random_state=0,
         stratify=train_df["Insult"],
     )
@@ -1730,6 +1802,7 @@ def _prepare_detecting_insults_second_split(
         "authoritative_train_sources": [str(visible_output / "train.csv")],
         "authoritative_validation_sources": ["validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "submission_rows",
     }
 
 
@@ -1742,7 +1815,11 @@ def _prepare_text_normalization_second_split(competition_id, visible_output, val
     test_name = f"{prefix}_test_2.csv"
     train_df = pd.read_csv(visible_output / train_name)
     sentence_ids = train_df["sentence_id"].unique()
-    keep_sentence_ids, val_sentence_ids = train_test_split(sentence_ids, test_size=0.1, random_state=0)
+    keep_sentence_ids, val_sentence_ids = train_test_split(
+        sentence_ids,
+        test_size=_configured_split_fraction(),
+        random_state=0,
+    )
     keep_df = train_df[train_df["sentence_id"].isin(keep_sentence_ids)].copy()
     val_df = train_df[train_df["sentence_id"].isin(val_sentence_ids)].copy()
     keep_df.to_csv(visible_output / train_name, index=False)
@@ -1762,6 +1839,7 @@ def _prepare_text_normalization_second_split(competition_id, visible_output, val
         "authoritative_train_sources": [str(visible_output / train_name)],
         "authoritative_validation_sources": [f"validation/{test_name}"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "row_count",
     }
 
 
@@ -1807,6 +1885,7 @@ def _prepare_whale_second_split(visible_output, validation_dir, hidden_answers_p
         "authoritative_train_sources": [str(visible_output / "train2")],
         "authoritative_validation_sources": ["validation", "validation/validation.csv"],
         "hidden_answer_granularity": "direct",
+        "hidden_alignment_mode": "id_count",
     }
 
 
@@ -1882,6 +1961,7 @@ def _prepare_mlsp_second_split(visible_output, validation_dir, hidden_answers_pa
         "authoritative_train_sources": [manifest_path],
         "authoritative_validation_sources": ["validation/essential_data", "validation/supplemental_data"],
         "hidden_answer_granularity": "derived",
+        "hidden_alignment_mode": "group_count",
     }
 
 
@@ -1949,9 +2029,14 @@ def _prepare_second_split_hidden_validation_artifacts(
 
 
 def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
+    global DEFAULT_SPLIT_FRACTION
+
     competition_id = str(getattr(getattr(cfg, "hidden_validation", None), "competition_name", "")).strip() or infer_competition_id(cfg)
     if competition_id not in supported_deterministic_competition_ids():
         return None
+    DEFAULT_SPLIT_FRACTION = float(
+        getattr(getattr(cfg, "hidden_validation", None), "split_fraction", 0.10)
+    )
 
     try:
         from mlebench.registry import registry
@@ -1973,10 +2058,7 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
     visible_output = attempt_dir / "input"
     manifest_path = attempt_dir / "split_manifest.json"
     evidence_dir = attempt_dir / "evidence"
-    visible_validation_dir = visible_output / "visible_validation"
     hidden_validation_dir = visible_output / "hidden_validation"
-    visible_answers_path = visible_output / "visible_validation_answers.csv"
-    visible_sample_submission_path = visible_output / "sampleVisibleValidationSubmission.csv"
     hidden_answers_path = attempt_dir / "hidden_validation_answers.csv"
     hidden_sample_submission_path = attempt_dir / "sampleHiddenValidationSubmission.csv"
 
@@ -1997,35 +2079,20 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
             hidden_sample_submission_path,
             hidden_sample_submission_path,
         )
-        visible_validation_dir.mkdir(parents=True, exist_ok=True)
-        visible_prep_result = _prepare_second_split_hidden_validation_artifacts(
-            competition_id,
-            visible_output,
-            visible_validation_dir,
-            visible_answers_path,
-            visible_sample_submission_path,
-            visible_sample_submission_path,
-        )
-        authoritative_train_sources = visible_prep_result["authoritative_train_sources"]
-        authoritative_visible_validation_sources = _rewrite_validation_sources(
-            visible_prep_result["authoritative_validation_sources"],
-            visible_validation_dir,
-        )
+        authoritative_train_sources = hidden_prep_result["authoritative_train_sources"]
         authoritative_hidden_validation_sources = _rewrite_validation_sources(
             hidden_prep_result["authoritative_validation_sources"],
             hidden_validation_dir,
         )
-        visible_answer_granularity = visible_prep_result["hidden_answer_granularity"]
         hidden_answer_granularity = hidden_prep_result["hidden_answer_granularity"]
-        authoritative_label_sources = [str(visible_answers_path)]
+        hidden_alignment_mode = hidden_prep_result.get("hidden_alignment_mode", "submission_rows")
         authoritative_hidden_answer_sources = [str(hidden_answers_path)]
         strategy_summary = (
-            "Deterministic mle-bench lite hidden-validation adapter. "
-            "Visible input is copied from cfg.data_dir, then two deterministic splits are performed "
-            "over the prepared training data only. The first holdout is exposed under hidden_validation/ "
-            "with labels kept outside the agent workspace, and the second holdout is exposed under "
-            "visible_validation/ with labels available in visible_validation_answers.csv. Runtime search "
-            "uses only the scored visible split, while hidden validation is stored separately for final selection."
+            "Deterministic hidden-validation adapter for supported MLE-bench lite and MLEBench-30 tasks. "
+            "Visible input is copied from cfg.data_dir, then one deterministic hidden holdout is performed "
+            "over the prepared training data only. The holdout is exposed under hidden_validation/ with labels "
+            "kept outside the agent workspace. Runtime search continues to use self-reported metrics, while "
+            "hidden validation is used only for final selection among valid submissions."
         )
 
         _write_adapter_evidence(
@@ -2034,19 +2101,15 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
             hidden_output=attempt_dir,
             evidence_dir=evidence_dir,
             authoritative_train_sources=authoritative_train_sources,
-            authoritative_validation_sources=authoritative_visible_validation_sources + authoritative_hidden_validation_sources,
+            authoritative_validation_sources=authoritative_hidden_validation_sources,
             authoritative_hidden_answer_sources=authoritative_hidden_answer_sources,
             strategy_summary=strategy_summary,
         )
 
         hidden_count = len(read_csv_rows(hidden_answers_path))
-        visible_validation_count = len(read_csv_rows(visible_answers_path))
         visible_count = _estimate_visible_count(visible_output, authoritative_train_sources)
         manifest = {
             "visible_input_dir": str(visible_output),
-            "visible_validation_dir": str(visible_validation_dir),
-            "visible_answers_path": str(visible_answers_path),
-            "visible_sample_submission_path": str(visible_sample_submission_path),
             "hidden_validation_dir": str(hidden_validation_dir),
             "hidden_answers_path": str(hidden_answers_path),
             "hidden_sample_submission_path": str(hidden_sample_submission_path),
@@ -2054,17 +2117,15 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
             "split_seed": "mlebench_prepare",
             "strategy_summary": strategy_summary,
             "visible_count": visible_count,
-            "visible_validation_count": visible_validation_count,
             "hidden_count": hidden_count,
-            "contract_version": "mlebench_lite_adapter_v2",
+            "contract_version": "mlebench_lite_adapter_v3",
             "evidence_dir": str(evidence_dir),
             "authoritative_train_sources": authoritative_train_sources,
-            "authoritative_label_sources": authoritative_label_sources,
-            "authoritative_visible_validation_sources": authoritative_visible_validation_sources,
             "authoritative_hidden_validation_sources": authoritative_hidden_validation_sources,
             "authoritative_hidden_answer_sources": authoritative_hidden_answer_sources,
-            "visible_answer_granularity": visible_answer_granularity,
             "hidden_answer_granularity": hidden_answer_granularity,
+            "hidden_alignment_mode": hidden_alignment_mode,
+            "split_fraction": _configured_split_fraction(),
         }
         manifest_path.write_text(json.dumps(manifest, indent=2))
 
@@ -2078,9 +2139,6 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
                 "fallback_mode": False,
                 "fallback_reason": "",
                 "visible_input_dir": manifest["visible_input_dir"],
-                "visible_validation_dir": manifest["visible_validation_dir"],
-                "visible_answers_path": manifest["visible_answers_path"],
-                "visible_sample_submission_path": manifest["visible_sample_submission_path"],
                 "hidden_validation_dir": manifest["hidden_validation_dir"],
                 "hidden_answers_path": manifest["hidden_answers_path"],
                 "hidden_sample_submission_path": manifest["hidden_sample_submission_path"],
@@ -2090,15 +2148,15 @@ def maybe_prepare_mlebench_lite_hidden_validation(cfg) -> dict[str, Any] | None:
             }
         )
         logger.info(
-            "Prepared deterministic mle-bench lite hidden validation adapter for %s",
+            "Prepared deterministic hidden validation adapter for %s",
             competition_id,
         )
         return save_runtime_state(cfg, state)
     except Exception as exc:
         logger.exception(
-            "Deterministic mle-bench lite hidden validation adapter failed for %s",
+            "Deterministic hidden validation adapter failed for %s",
             competition_id,
         )
         raise RuntimeError(
-            f"Deterministic mle-bench lite hidden validation adapter failed for {competition_id}: {exc}"
+            f"Deterministic hidden validation adapter failed for {competition_id}: {exc}"
         ) from exc
